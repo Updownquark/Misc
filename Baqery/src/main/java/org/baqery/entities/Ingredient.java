@@ -21,5 +21,5 @@ public interface Ingredient extends Named {
 	Ingredient setUnitVolumeCost(Amount<Money> cost);
 	Ingredient setUnitVolume(Amount<Volume> unitVolume);
 
-	ObservableCollection<Material> getMaterials();
+	ObservableCollection<Allergen> getMaterials();
 }
