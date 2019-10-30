@@ -1,14 +1,18 @@
 package org.baqery;
 
 import java.io.*;
+import java.util.Arrays;
 
 import javax.swing.JPanel;
 
 import org.baqery.entities.Allergen;
+import org.baqery.entities.BasicIngredient;
 import org.baqery.entities.Ingredient;
+import org.observe.SettableValue;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableValueSet;
-import org.observe.util.swing.ObservableSwingUtils;
+import org.observe.util.swing.JustifiedBoxLayout;
+import org.observe.util.swing.PanelPopulation;
 import org.xml.sax.SAXException;
 
 public class Baqery extends JPanel {
@@ -16,6 +20,8 @@ public class Baqery extends JPanel {
 
 	private final ObservableValueSet<Allergen> theAllergens;
 	private final ObservableValueSet<Ingredient> theIngredients;
+
+	private final SettableValue<IngredientType> theSelectedIngType;
 
 	public Baqery() {
 		theConfig = ObservableConfig.createRoot("baqery");
@@ -47,17 +53,33 @@ public class Baqery extends JPanel {
 		theIngredients = theConfig.asValue(Ingredient.class).at("ingredients").buildEntitySet();
 		theAllergens = theConfig.asValue(Allergen.class).at("allergens").buildEntitySet();
 
+		theSelectedIngType = theConfig.asValue(IngredientType.class).at("selected-type").buildValue();
+
 		initComponents();
 	}
 
 	private void initComponents() {
-		ObservableSwingUtils.populateFields(this, null)//
-		.addTabs(tabs -> tabs.withTabHPanel("ingredients", "box", p -> {
-			p.addTable(theIngredients.getValues(), table -> {//
-				// TODO
-			});
-		}, tab -> tab.setName("Ingredients")//
-			))//
+		PanelPopulation.populateHPanel(this, new JustifiedBoxLayout(false).mainJustified().crossJustified(), null)//
+		.addVPanel(leftPanel -> {
+			leftPanel.addComboField("Ingredient Type:", theSelectedIngType, Arrays.asList(IngredientType.values()), ingCombo -> {
+				ingCombo.withValueTooltip(type -> {
+					switch (type) {
+					case Basic:
+						return "Basic (generally bought) ingredients that are the components of recipes";
+					case Recipe:
+						return "A combination of ingredients that may themselves be combined into other recipes";
+					}
+					return null;
+				}).fill();
+			})//
+			.addTable(theIngredients.getValues().flow().refresh(theSelectedIngType.noInitChanges())
+				.filter(ing -> (ing instanceof BasicIngredient) == (theSelectedIngType.get() == IngredientType.Basic) ? null
+					: "Wrong ingredient type")
+						.collect(), tbl -> {
+							// TODO
+						})//
+			;
+		})//
 		;
 	}
 }
