@@ -6,13 +6,12 @@ import java.time.Duration;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-import org.baqery.entities.Allergen;
-import org.baqery.entities.BasicIngredient;
-import org.baqery.entities.Ingredient;
-import org.baqery.entities.Recipe;
+import org.baqery.entities.*;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
+import org.observe.config.ObservableConfigFormat;
+import org.observe.config.ObservableConfigFormatSet;
 import org.observe.config.ObservableValueSet;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.JustifiedBoxLayout;
@@ -24,17 +23,21 @@ import org.qommons.QommonsUtils;
 import org.qommons.io.Format;
 import org.xml.sax.SAXException;
 
+import com.google.common.reflect.TypeToken;
+
 public class Baqery extends JPanel {
 	private static final Format<Double> COST_NUMBER_FORMAT = Format.doubleFormat("0.00");
 	private static final Format<Double> COST_FORMAT = Format.doubleFormat("$0.00");
 	private final ObservableConfig theConfig;
 
 	private final ObservableValueSet<Allergen> theAllergens;
+	private final ObservableValueSet<LaborType> theLaborTypes;
 	private final ObservableValueSet<Ingredient> theIngredients;
-	private final ObservableCollection<BasicIngredient> theBasicIngredients;
+	private final ObservableValueSet<InventoryItem> theInventory;
+	private final ObservableCollection<PurchasedIngredient> thePurchasedIngredients;
 	private final ObservableCollection<Recipe> theRecipes;
 
-	private final SettableValue<BasicIngredient> theSelectedIngredient;
+	private final SettableValue<PurchasedIngredient> theSelectedIngredient;
 	private final SettableValue<Recipe> theSelectedRecipe;
 
 	public Baqery() {
@@ -64,12 +67,29 @@ public class Baqery extends JPanel {
 			ex.printStackTrace();
 		});
 
-		theIngredients = theConfig.asValue(Ingredient.class).at("ingredients").buildEntitySet();
-		theAllergens = theConfig.asValue(Allergen.class).at("allergens").buildEntitySet();
-		theBasicIngredients = theIngredients.getValues().flow().filter(BasicIngredient.class).collect();
+		ObservableConfigFormatSet parsing = new ObservableConfigFormatSet();
+		theAllergens = theConfig.asValue(Allergen.class).at("allergens").withFormatSet(parsing).buildEntitySet(null);
+		theLaborTypes = theConfig.asValue(LaborType.class).at("labor-types").withFormatSet(parsing).buildEntitySet(null);
+		theIngredients = theConfig.asValue(Ingredient.class).at("ingredients").withFormatSet(parsing)
+			.asEntity(efb -> efb//
+				.withSubType(TypeTokens.get().of(PurchasedIngredient.class), null)//
+				.withSubType(TypeTokens.get().of(Recipe.class), null)//
+				).buildEntitySet(null);
+		theInventory = theConfig.asValue(InventoryItem.class).at("inventory").withFormatSet(parsing)
+			.asEntity(efb -> efb//
+				.withFieldFormat(InventoryItem::getIngredient,
+					ObservableConfigFormat.<Ingredient> buildReferenceFormat(fields -> theIngredients.getValues(), null).build())//
+				.withFieldFormat(InventoryItem::getAllergens, //
+					ObservableConfigFormat.ofCollection(new TypeToken<ObservableCollection<Allergen>>() {},
+						ObservableConfigFormat.<Allergen> buildReferenceFormat(fields -> theAllergens.getValues(), null).build(), parsing,
+						"allergens", "allergen"))//
+				.withSubType(TypeTokens.get().of(PurchasedInventoryItem.class), null)//
+				.withSubType(TypeTokens.get().of(Batch.class), null)//
+				).buildEntitySet(null);
+		thePurchasedIngredients = theIngredients.getValues().flow().filter(PurchasedIngredient.class).collect();
 		theRecipes = theIngredients.getValues().flow().filter(Recipe.class).collect();
 
-		theSelectedIngredient = SettableValue.build(TypeTokens.get().of(BasicIngredient.class)).safe(false).build();
+		theSelectedIngredient = SettableValue.build(TypeTokens.get().of(PurchasedIngredient.class)).safe(false).build();
 		theSelectedRecipe = SettableValue.build(TypeTokens.get().of(Recipe.class)).safe(false).build();
 
 		initComponents();
@@ -93,7 +113,7 @@ public class Baqery extends JPanel {
 				f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(
 					tf -> tf.setIcon(ObservableSwingUtils.getFixedIcon(ObservableSwingUtils.class, "/icons/search.png", 16, 16))
 					.setEmptyText("Search...")))//
-			.addTable(theBasicIngredients, table -> table.withColumn("Name", String.class, Ingredient::getName, column -> {
+			.addTable(thePurchasedIngredients, table -> table.withColumn("Name", String.class, Ingredient::getName, column -> {
 				column.withValueTooltip((ing, name) -> ing.getDescription())//
 				.withMutation(mut -> mut.asText(Format.TEXT)); // TODO Enforce name uniqueness
 			}).withSelection(theSelectedIngredient, false));
@@ -102,33 +122,33 @@ public class Baqery extends JPanel {
 
 	private void populateIngredientEditor(PanelPopulator<?, ?> panel) {
 		panel.fill().visibleWhen(theSelectedIngredient.map(i -> i != null))//
-		.addTextField("Name:", theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getName, BasicIngredient::setName, null),
+		.addTextField("Name:", theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getName, PurchasedIngredient::setName, null),
 			Format.TEXT, f -> f.fill())//
 		.addTextField("Description:",
-			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getDescription, BasicIngredient::setDescription, null),
+			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getDescription, PurchasedIngredient::setDescription, null),
 			Format.TEXT, f -> f.fill())// TODO Make this a text area
 		.addHPanel("Volume Cost:", new JustifiedBoxLayout(false).mainJustified(), vCostPanel -> {
 			vCostPanel.addComponent(null, new JLabel("$"), null)//
 			.addTextField(null, //
-				theSelectedIngredient.map(TypeTokens.get().DOUBLE, BasicIngredient::getVolumeCost, BasicIngredient::setVolumeCost,
+				theSelectedIngredient.map(TypeTokens.get().DOUBLE, PurchasedIngredient::getVolumeCost, PurchasedIngredient::setVolumeCost,
 					null),
 				COST_NUMBER_FORMAT, null)//
 			.addComponent(null, new JLabel("/"), null)//
-			.addTextField(null, theSelectedIngredient.map(BaqeryUtils.VOLUME_AMOUNT_TYPE, BasicIngredient::getVolumeAmount,
-				BasicIngredient::setVolumeAmount, null), BaqeryUtils.VOLUME_AMOUNT_FORMAT, null);
+			.addTextField(null, theSelectedIngredient.map(BaqeryUtils.VOLUME_AMOUNT_TYPE, PurchasedIngredient::getVolumeAmount,
+				PurchasedIngredient::setVolumeAmount, null), BaqeryUtils.VOLUME_AMOUNT_FORMAT, null);
 		})//
 		.addHPanel("Weight Cost:", new JustifiedBoxLayout(false).mainJustified(), vCostPanel -> {
 			vCostPanel.addComponent(null, new JLabel("$"), null)//
 			.addTextField(null, //
-				theSelectedIngredient.map(TypeTokens.get().DOUBLE, BasicIngredient::getMassCost, BasicIngredient::setMassCost,
+				theSelectedIngredient.map(TypeTokens.get().DOUBLE, PurchasedIngredient::getMassCost, PurchasedIngredient::setMassCost,
 					null),
 				COST_NUMBER_FORMAT, null)//
 			.addComponent(null, new JLabel("/"), null)//
-			.addTextField(null, theSelectedIngredient.map(BaqeryUtils.MASS_AMOUNT_TYPE, BasicIngredient::getMassAmount,
-				BasicIngredient::setMassAmount, null), BaqeryUtils.MASS_AMOUNT_FORMAT, null);
+			.addTextField(null, theSelectedIngredient.map(BaqeryUtils.MASS_AMOUNT_TYPE, PurchasedIngredient::getMassAmount,
+				PurchasedIngredient::setMassAmount, null), BaqeryUtils.MASS_AMOUNT_FORMAT, null);
 		})//
 		.addTextField("Notes:",
-			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getNotes, BasicIngredient::setNotes, null), Format.TEXT,
+			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getNotes, PurchasedIngredient::setNotes, null), Format.TEXT,
 			f -> f.fill())// TODO Make this a text area
 		;
 	}
@@ -176,4 +196,67 @@ public class Baqery extends JPanel {
 			Format.TEXT, f -> f.fill())// TODO Make this a text area
 		;
 	}
+
+	/*
+	Features:
+	Labels
+	Costs, Weights, & Measures
+	Batch Coding
+
+	Tabs:
+	Tab: Ingredients
+		Table: Ingredients (Searchable)
+			Text: Name
+			Label: Description
+			Label: Notes
+			Label: Used In (Recipes)
+		Ingredient Editor
+			Text: Name
+			Text Area: Description
+			Text Area: Notes
+			(For Recipes Only)
+			Table: Ingredients
+				Combo: Ingredient
+				Text: Amount (w/unit)
+			Text: Standard Batch
+			List: Labor (Type:Hours)
+			Text Area: Procedure
+	Tab: Inventory
+		Check: Show Inactive
+		Table: Inventory Items (Searchable)
+			Text: Name
+			Label: Ingredient
+			Label: Notes
+			Label: Allergens
+			Label: Made On
+			Text: Batch Code
+		InventoryItem Editor
+			Text: Name
+			Label: Ingredient
+			Check: Active
+			Text Area: Notes
+			List: Allergens
+			(For Batches Only)
+			Text: Made On
+			Text: Batch Code (auto-generated but overrideable)
+			Table: Ingredients
+				Label: Ingredient
+				Combo: InventoryItem
+				Text: Batch Codes (editable for basic inventory items)
+			Text: Batch Cost (post toggle button: Calculated)
+			Button: Print Label (pops up print window)
+	Tab: Orders
+		Check: Show Inactive
+		Table: Orders (Searchable)
+		Order Editor
+			Text: Name
+			Text: Notes
+			Table: Items
+				Combo: Recipe
+				Combo: Batch
+				Text: Amount
+			Label: Cost (breakdown by labor type/ingredient)
+			Text: Price
+			Label: Hourly Rate (breakdown by labor type)
+	 */
 }

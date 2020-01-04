@@ -1,10 +1,8 @@
 package org.baqery.entities;
 
-import org.qommons.Named;
+import org.observe.util.NamedEntity;
 
-public interface LaborType extends Named {
-	LaborType setName(String name);
-
+public interface LaborType extends NamedEntity {
 	double getHourlyRate();
 	LaborType setHourlyRate(double rate);
 }

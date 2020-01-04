@@ -1,7 +1,6 @@
 package org.baqery.entities;
 
-import org.qommons.Named;
+import org.observe.util.NamedEntity;
 
-public interface Allergen extends Named {
-	Allergen setName(String name);
+public interface Allergen extends NamedEntity {
 }

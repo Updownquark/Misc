@@ -1,14 +1,13 @@
 package org.baqery.entities;
 
 import java.time.Instant;
-import java.util.List;
 
 import org.jscience.physics.amount.Amount;
+import org.observe.collect.ObservableCollection;
+import org.observe.util.Identified;
 import org.observe.util.NamedEntity;
 
-public interface InventoryItem extends NamedEntity {
-	long getId();
-
+public interface InventoryItem extends NamedEntity, Identified {
 	boolean isActive();
 	InventoryItem setActive(boolean active);
 
@@ -22,5 +21,5 @@ public interface InventoryItem extends NamedEntity {
 
 	double getCost(Amount<?> amount) throws UnsupportedOperationException;
 
-	List<Allergen> getAllergens();
+	ObservableCollection<Allergen> getAllergens();
 }
