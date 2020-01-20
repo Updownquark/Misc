@@ -1,6 +1,5 @@
 package org.baqery.entities;
 
-import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -8,6 +7,8 @@ import javax.measure.quantity.Quantity;
 
 import org.jscience.physics.amount.Amount;
 import org.observe.assoc.ObservableMap;
+import org.observe.collect.ObservableCollection;
+import org.observe.util.TypeTokens;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 
@@ -47,10 +48,10 @@ public interface Batch extends InventoryItem {
 	}
 
 	@Override
-	default List<Allergen> getAllergens() {
+	default ObservableCollection<Allergen> getAllergens() {
 		Set<Allergen> allergens = new TreeSet<>((a1, a2) -> StringUtils.compareNumberTolerant(a1.getName(), a2.getName(), true, true));
 		for (InventoryItem inv : getIngredients().values())
 			allergens.addAll(inv.getAllergens());
-		return QommonsUtils.unmodifiableCopy(allergens);
+		return ObservableCollection.of(TypeTokens.get().of(Allergen.class), QommonsUtils.unmodifiableCopy(allergens));
 	}
 }

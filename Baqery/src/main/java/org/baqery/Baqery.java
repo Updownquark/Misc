@@ -3,7 +3,6 @@ package org.baqery;
 import java.io.*;
 import java.time.Duration;
 
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import org.baqery.entities.*;
@@ -19,7 +18,9 @@ import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.observe.util.swing.TableContentControl;
+import org.qommons.Named;
 import org.qommons.QommonsUtils;
+import org.qommons.StringUtils;
 import org.qommons.io.Format;
 import org.xml.sax.SAXException;
 
@@ -113,43 +114,43 @@ public class Baqery extends JPanel {
 				f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(
 					tf -> tf.setIcon(ObservableSwingUtils.getFixedIcon(ObservableSwingUtils.class, "/icons/search.png", 16, 16))
 					.setEmptyText("Search...")))//
-			.addTable(thePurchasedIngredients, table -> table.withColumn("Name", String.class, Ingredient::getName, column -> {
-				column.withValueTooltip((ing, name) -> ing.getDescription())//
-				.withMutation(mut -> mut.asText(Format.TEXT)); // TODO Enforce name uniqueness
-			}).withSelection(theSelectedIngredient, false));
+			.addTable(thePurchasedIngredients, table -> table//
+				.withColumn("Name", String.class, Ingredient::getName, column -> {
+					column.withValueTooltip((ing, name) -> ing.getDescription())//
+					.withMutation(mut -> mut.asText(Format.TEXT).filterAccept((ing, n) -> {
+						if (StringUtils.isUniqueName(theIngredients.getValues(), Named::getName, n, (Ingredient) ing.get()))
+							return null;
+						else
+							return "An ingredient named " + n + " already exists";
+					}));
+				})//
+				.withColumn("Description", String.class, Ingredient::getDescription, null)//
+				.withColumn("Notes", String.class, Ingredient::getNotes, null)//
+				.withColumn("Used In", String.class, this::getUses, null)//
+				.withSelection(theSelectedIngredient, false));
 		}).addVPanel(this::populateIngredientEditor);
 	}
 
 	private void populateIngredientEditor(PanelPopulator<?, ?> panel) {
+		ObservableCollection<IngredientAmount> recipeIngredients = ObservableCollection.flattenValue(//
+			theSelectedIngredient.map(ing -> ing instanceof Recipe ? ((Recipe) ing).getIngredients().getValues() : null));
 		panel.fill().visibleWhen(theSelectedIngredient.map(i -> i != null))//
-		.addTextField("Name:", theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getName, PurchasedIngredient::setName, null),
-			Format.TEXT, f -> f.fill())//
-		.addTextField("Description:",
+		.addTextField("Name:",
+			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getName, PurchasedIngredient::setName, null), Format.TEXT,
+			f -> f.fill())//
+		.addTextArea("Description:",
 			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getDescription, PurchasedIngredient::setDescription, null),
-			Format.TEXT, f -> f.fill())// TODO Make this a text area
-		.addHPanel("Volume Cost:", new JustifiedBoxLayout(false).mainJustified(), vCostPanel -> {
-			vCostPanel.addComponent(null, new JLabel("$"), null)//
-			.addTextField(null, //
-				theSelectedIngredient.map(TypeTokens.get().DOUBLE, PurchasedIngredient::getVolumeCost, PurchasedIngredient::setVolumeCost,
-					null),
-				COST_NUMBER_FORMAT, null)//
-			.addComponent(null, new JLabel("/"), null)//
-			.addTextField(null, theSelectedIngredient.map(BaqeryUtils.VOLUME_AMOUNT_TYPE, PurchasedIngredient::getVolumeAmount,
-				PurchasedIngredient::setVolumeAmount, null), BaqeryUtils.VOLUME_AMOUNT_FORMAT, null);
-		})//
-		.addHPanel("Weight Cost:", new JustifiedBoxLayout(false).mainJustified(), vCostPanel -> {
-			vCostPanel.addComponent(null, new JLabel("$"), null)//
-			.addTextField(null, //
-				theSelectedIngredient.map(TypeTokens.get().DOUBLE, PurchasedIngredient::getMassCost, PurchasedIngredient::setMassCost,
-					null),
-				COST_NUMBER_FORMAT, null)//
-			.addComponent(null, new JLabel("/"), null)//
-			.addTextField(null, theSelectedIngredient.map(BaqeryUtils.MASS_AMOUNT_TYPE, PurchasedIngredient::getMassAmount,
-				PurchasedIngredient::setMassAmount, null), BaqeryUtils.MASS_AMOUNT_FORMAT, null);
-		})//
-		.addTextField("Notes:",
+			Format.TEXT, f -> f.fill())//
+		.addTextArea("Notes:",
 			theSelectedIngredient.map(TypeTokens.get().STRING, Ingredient::getNotes, PurchasedIngredient::setNotes, null), Format.TEXT,
-			f -> f.fill())// TODO Make this a text area
+			f -> f.fill())//
+		.addTable(recipeIngredients,
+			ingTable -> ingTable.fill().visibleWhen(theSelectedIngredient.map(ing -> ing instanceof Recipe))//
+			.withColumn("Ingredient", Ingredient.class, IngredientAmount::getIngredient,
+				ingCol -> ingCol.withMutation(ingMut -> ingMut.asCombo(Ingredient::getName, theIngredients.getValues())))//
+		// .withColumn("Amount", (Class<Amount<?>>)(Class<?>) Amount.class, IngredientAmount::getAmount, amtCol->amtCol
+		// .formatText(amt->))
+		)//
 		;
 	}
 
@@ -195,6 +196,10 @@ public class Baqery extends JPanel {
 		.addTextField("Notes:", theSelectedRecipe.map(TypeTokens.get().STRING, Ingredient::getNotes, Recipe::setNotes, null),
 			Format.TEXT, f -> f.fill())// TODO Make this a text area
 		;
+	}
+
+	private String getUses(Ingredient ingredient) {
+		return ""; // TODO
 	}
 
 	/*
