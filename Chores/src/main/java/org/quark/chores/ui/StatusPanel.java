@@ -37,7 +37,7 @@ public class StatusPanel extends JPanel {
 								TypeTokens.get().keyFor(ObservableCollection.class).parameterized(AssignedJob.class), //
 								tx -> tx.nullToNull(true).map(asn -> asn.getAssignments().getValues())))//
 				.flow().groupBy(TypeTokens.get().of(Worker.class), AssignedJob::getWorker, null).gather();
-		panel.addLabel("Last Assignment:", theUI.getSelectedAssignment().transform(TypeTokens.get().of(Instant.class),
+		panel.addLabel("Assignment Date:", theUI.getSelectedAssignment().transform(TypeTokens.get().of(Instant.class),
 				tx -> tx.nullToNull(true).map(asn -> asn.getDate())), ChoreUtils.DATE_FORMAT, null);
 		panel.addTable(assignmentsByWorker.observeSingleEntries(), table -> {
 			table.fill().fillV()//
@@ -71,8 +71,11 @@ public class StatusPanel extends JPanel {
 					}))//
 			;
 		});
-		panel.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(), p -> p.addButton("New Assignment",
-				__ -> createNewAssignments(panel), btn -> btn.withTooltip("Creates a new set of assignments")));
+		panel.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(), p -> {
+			p.addButton("New Assignment", __ -> createNewAssignments(panel), btn -> btn.withTooltip("Creates a new set of assignments"));
+			p.addButton("Clear", __ -> clearAssignments(panel),
+					btn -> btn.withTooltip("Clears the current set of assignments with no consequences to the workers"));
+		});
 	}
 
 	private void createNewAssignments(PanelPopulator<?, ?> panel) {
@@ -126,7 +129,8 @@ public class StatusPanel extends JPanel {
 			Iterator<Job> jobIter = allJobs.iterator();
 			while (jobIter.hasNext()) {
 				Job job = jobIter.next();
-				if (job.getLastDone() == null) {
+				if(!job.isActive()){
+				} else if (job.getLastDone() == null) {
 					continue;
 				} else if (job.getFrequency() == null
 						|| job.getLastDone().plus(job.getFrequency()).compareTo(newAssignment.getDate()) > 0) {
@@ -149,7 +153,19 @@ public class StatusPanel extends JPanel {
 			}
 			Instant todo1 = job1.getLastDone().plus(job1.getFrequency());
 			Instant todo2 = job2.getLastDone().plus(job2.getFrequency());
-			int comp = todo1.compareTo(todo2);
+			boolean needsDone1 = todo1.compareTo(newAssignment.getDate()) <= 0;
+			boolean needsDone2 = todo2.compareTo(newAssignment.getDate()) <= 0;
+			if (needsDone1) {
+				if (!needsDone2) {
+					return -1;
+				}
+			} else if (needsDone2) {
+				return 1;
+			}
+			int comp = Integer.compare(job1.getPriority(), job2.getPriority());
+			if (comp == 0) {
+				comp = todo1.compareTo(todo2);
+			}
 			if (comp == 0) {
 				comp = job1.getFrequency().compareTo(job2.getFrequency());
 			}
@@ -236,9 +252,10 @@ public class StatusPanel extends JPanel {
 	}
 
 	private static boolean shouldDo(Worker worker, Job job, int workLeft) {
-		if (job.getDifficulty() > worker.getAbility()) {
+		if (worker.getLevel() < job.getMinLevel() || worker.getLevel() > job.getMaxLevel()) {
 			return false;
-		} else if (job.getDifficulty() > workLeft * 2) {
+		}
+		if (job.getDifficulty() > workLeft * 2) {
 			return false;
 		}
 		for (String label : worker.getLabels()) {
@@ -252,5 +269,27 @@ public class StatusPanel extends JPanel {
 			}
 		}
 		return true;
+	}
+
+	private void clearAssignments(PanelPopulator<?, ?> panel) {
+		StringBuilder message = null;
+		if (theUI.getSelectedAssignment().get() != null) {
+			for (AssignedJob job : theUI.getSelectedAssignment().get().getAssignments().getValues()) {
+				if (job.getCompletion() > 0) {
+					message = append(message, job.getWorker().getName() + ": " + job.getJob().getName() + " "
+							+ ((int) Math.round(job.getCompletion() * 100.0 / job.getJob().getDifficulty())) + "% complete");
+				}
+			}
+		}
+		if (message != null) {
+			message.append("\n\nIf the assignment is cleared, the workers' progress on them will not be counted.\n"
+					+ "Are you sure you want to clear the assignment now?");
+			if (!panel.alert("Some jobs have progress", message.toString()).confirm(true)) {
+				return;
+			}
+		} else if (!panel.alert("Clear the Assignment?", "Are you sure you want to clear the assignment?").confirm(true)) {
+			return;
+		}
+		theUI.getAssignments().getValues().clear();
 	}
 }

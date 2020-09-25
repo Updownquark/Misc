@@ -14,6 +14,17 @@ public interface Job extends Identified, NamedEntity {
 	Duration getFrequency();
 	Job setFrequency(Duration frequency);
 
+	int getMinLevel();
+	Job setMinLevel(int minLevel);
+	int getMaxLevel();
+	Job setMaxLevel(int maxLevel);
+
+	int getPriority();
+	Job setPriority(int priority);
+
+	boolean isActive();
+	Job setActive(boolean active);
+
 	int getMultiplicity();
 	Job setMultiplicity(int multiplicity);
 

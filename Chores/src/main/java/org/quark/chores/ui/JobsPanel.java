@@ -26,11 +26,20 @@ public class JobsPanel extends JPanel {
 					table.fill().fillV().withNameColumn(Job::getName, Job::setName, true, col -> col.withWidths(50, 150, 250))//
 							.withColumn("Difficulty", int.class, Job::getDifficulty,
 									col -> col.withMutation(mut -> mut.mutateAttribute(Job::setDifficulty).asText(SpinnerFormat.INT)))//
+							.withColumn("Min Level", int.class, Job::getMinLevel,
+									col -> col.withMutation(mut -> mut.mutateAttribute(Job::setMinLevel).asText(SpinnerFormat.INT)))//
+							.withColumn("Max Level", int.class, Job::getMaxLevel,
+									col -> col.withMutation(mut -> mut.mutateAttribute(Job::setMaxLevel).asText(SpinnerFormat.INT)))//
 							.withColumn("Frequency", Duration.class, Job::getFrequency,
 									col -> col.withMutation(
-											mut -> mut.mutateAttribute(Job::setFrequency).asText(SpinnerFormat.flexDuration())))//
-							.withColumn("Multi", int.class, Job::getMultiplicity,
-									col -> col.withMutation(mut -> mut.mutateAttribute(Job::setMultiplicity).asText(SpinnerFormat.INT)))//
+											mut -> mut.mutateAttribute(Job::setFrequency).asText(SpinnerFormat.flexDuration(true))))//
+							.withColumn("Priority", int.class, Job::getPriority,
+									col -> col.withMutation(mut -> mut.mutateAttribute(Job::setPriority).asText(SpinnerFormat.INT)))//
+							.withColumn("Active", boolean.class, Job::isActive,
+									col -> col.withMutation(mut -> mut.mutateAttribute(Job::setActive).asCheck()).withWidths(25, 60, 80))//
+							// Haven't done anything with this, so let's just hide it
+							// .withColumn("Multi", int.class, Job::getMultiplicity,
+							// col -> col.withMutation(mut -> mut.mutateAttribute(Job::setMultiplicity).asText(SpinnerFormat.INT)))//
 							.withColumn("Last Done", Instant.class, Job::getLastDone, col -> col.formatText(ChoreUtils.DATE_FORMAT::format))//
 							.withColumn("Inclusion Labels", ChoreUtils.LABEL_SET_TYPE, Job::getInclusionLabels,
 									col -> col.formatText(ChoreUtils.LABEL_SET_FORMAT::format)
@@ -60,15 +69,16 @@ public class JobsPanel extends JPanel {
 										.with(Job::getName,
 												StringUtils.getNewItemName(theUI.getJobs().getValues(), Job::getName, "Job",
 														StringUtils.PAREN_DUPLICATES))//
+										.with(Job::isActive, true)//
+										.with(Job::getPriority, 5)//
 										.with(Job::getDifficulty, 1)//
+										.with(Job::getMaxLevel, 100)//
 										.with(Job::getMultiplicity, 1)//
 										.create().get();
 							}, null)//
 							.withRemove(null, action -> action.confirmForItems("Remove jobs?", "Permanently delete ", "?", true));
-					;
 				}))//
 				.lastV(bottom -> bottom.visibleWhen(theUI.getSelectedJob().map(j -> j != null))//
-		// TODO
 		));
 
 	}

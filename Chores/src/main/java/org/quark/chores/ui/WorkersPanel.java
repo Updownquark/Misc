@@ -26,6 +26,8 @@ public class WorkersPanel extends JPanel {
 						.firstV(top -> top.addTable(theUI.getWorkers().getValues(), table -> {
 							table.fill().dragSourceRow(null).dragAcceptRow(null)// Re-orderable by drag
 									.withNameColumn(Worker::getName, Worker::setName, true, null)//
+									.withColumn("Level", int.class, Worker::getLevel,
+											col -> col.withMutation(mut -> mut.mutateAttribute(Worker::setLevel).asText(SpinnerFormat.INT)))//
 									.withColumn("Ability", int.class, Worker::getAbility,
 											col -> col
 													.withMutation(mut -> mut.mutateAttribute(Worker::setAbility).asText(SpinnerFormat.INT)))//
@@ -41,6 +43,10 @@ public class WorkersPanel extends JPanel {
 													return null;
 												}).asText(ChoreUtils.LABEL_SET_FORMAT));
 									})//
+									.withColumn("Behind", long.class, Worker::getExcessPoints, col -> {
+										col.withHeaderTooltip("The number of points in debt the worker has accumulated");
+										col.withMutation(mut -> mut.asText(SpinnerFormat.LONG).mutateAttribute(Worker::setExcessPoints));
+									})//
 									.withSelection(theUI.getSelectedWorker(), false)//
 									.withAdd(() -> {
 										return theUI.getWorkers().create()//
@@ -55,23 +61,24 @@ public class WorkersPanel extends JPanel {
 						}))//
 						.lastV(bottom -> bottom.visibleWhen(theUI.getSelectedWorker().map(w -> w != null))
 								.decorate(deco -> deco.withTitledBorder("Job Preferences", Color.black))//
-								.addTable(theUI.getJobs().getValues(), prefTable -> {
-									prefTable.fill().fillV()//
-											.withColumn("Job", String.class, Job::getName, col -> col.withWidths(50, 150, 250))//
-											.withColumn("Preference", int.class,
-													job -> theUI.getSelectedWorker().get().getJobPreferences().getOrDefault(job,
-															ChoreUtils.DEFAULT_PREFERENCE),
-													col -> col.withMutation(mut -> mut.mutateAttribute((job, pref) -> {
-														theUI.getSelectedWorker().get().getJobPreferences().put(job, pref);
-													}).asText(SpinnerFormat.validate(SpinnerFormat.INT, pref -> {
-														if (pref < 0) {
-															return "No negative preferences";
-														} else if (pref > 10) {
-															return "Preference must be between 0 and 10";
-														}
-														return null;
-													})).clicks(1))//
-									);
-								})));
+								.addTable(theUI.getJobs().getValues().flow().refresh(theUI.getSelectedWorker().noInitChanges()).collect(),
+										prefTable -> {
+											prefTable.fill().fillV()//
+													.withColumn("Job", String.class, Job::getName, col -> col.withWidths(50, 150, 250))//
+													.withColumn("Preference", int.class,
+															job -> theUI.getSelectedWorker().get().getJobPreferences().getOrDefault(job,
+																	ChoreUtils.DEFAULT_PREFERENCE),
+															col -> col.withMutation(mut -> mut.mutateAttribute((job, pref) -> {
+																theUI.getSelectedWorker().get().getJobPreferences().put(job, pref);
+															}).asText(SpinnerFormat.validate(SpinnerFormat.INT, pref -> {
+																if (pref < 0) {
+																	return "No negative preferences";
+																} else if (pref > 10) {
+																	return "Preference must be between 0 and 10";
+																}
+																return null;
+															})).clicks(1))//
+											);
+										})));
 	}
 }

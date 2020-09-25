@@ -12,6 +12,9 @@ public interface Worker extends Identified, NamedEntity {
 	long getExcessPoints();
 	Worker setExcessPoints(long excessPoints);
 
+	int getLevel();
+	Worker setLevel(int level);
+
 	ObservableCollection<String> getLabels();
 
 	ObservableMap<Job, Integer> getJobPreferences();
