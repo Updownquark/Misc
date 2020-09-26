@@ -1,13 +1,19 @@
 package org.quark.chores.ui;
 
 import java.awt.Color;
+import java.awt.EventQueue;
 
 import javax.swing.JPanel;
 
+import org.observe.SettableValue;
+import org.observe.collect.ObservableCollection;
+import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
+import org.observe.util.swing.PanelPopulation.TableBuilder;
 import org.qommons.StringUtils;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
+import org.quark.chores.entities.AssignedJob;
 import org.quark.chores.entities.Job;
 import org.quark.chores.entities.Worker;
 
@@ -59,26 +65,106 @@ public class WorkersPanel extends JPanel {
 									.withRemove(null,
 											action -> action.confirmForItems("Remove workers?", "Permanently delete ", "?", true));
 						}))//
-						.lastV(bottom -> bottom.visibleWhen(theUI.getSelectedWorker().map(w -> w != null))
-								.decorate(deco -> deco.withTitledBorder("Job Preferences", Color.black))//
-								.addTable(theUI.getJobs().getValues().flow().refresh(theUI.getSelectedWorker().noInitChanges()).collect(),
-										prefTable -> {
-											prefTable.fill().fillV()//
-													.withColumn("Job", String.class, Job::getName, col -> col.withWidths(50, 150, 250))//
-													.withColumn("Preference", int.class,
-															job -> theUI.getSelectedWorker().get().getJobPreferences().getOrDefault(job,
-																	ChoreUtils.DEFAULT_PREFERENCE),
-															col -> col.withMutation(mut -> mut.mutateAttribute((job, pref) -> {
-																theUI.getSelectedWorker().get().getJobPreferences().put(job, pref);
-															}).asText(SpinnerFormat.validate(SpinnerFormat.INT, pref -> {
-																if (pref < 0) {
-																	return "No negative preferences";
-																} else if (pref > 10) {
-																	return "Preference must be between 0 and 10";
-																}
-																return null;
-															})).clicks(1))//
-											);
-										})));
+						.lastV(this::populateWorkerEditor));
+	}
+
+	void populateWorkerEditor(PanelPopulator<?, ?> bottom) {
+		ObservableCollection<AssignedJob> allAssignments = ObservableCollection
+				.flattenValue(theUI.getSelectedAssignment().map(assn -> assn == null ? null : assn.getAssignments().getValues()));
+		// allAssignments.simpleChanges().act(__ -> System.out.println("All assignments=" + allAssignments));
+		ObservableCollection<AssignedJob> assignments = allAssignments.flow().refresh(theUI.getSelectedWorker().noInitChanges())
+				.filter(assn -> assn.getWorker() == theUI.getSelectedWorker().get() ? null : "Wrong worker").collect();
+		// assignments.simpleChanges().act(__ -> System.out.println("Assignments=" + assignments));
+		ObservableCollection<Job> availableJobs = theUI.getJobs().getValues().flow().refresh(theUI.getSelectedWorker().noInitChanges())//
+				.whereContained(allAssignments.flow().map(Job.class, AssignedJob::getJob), false)//
+				.filter(job -> {
+					Worker worker = theUI.getSelectedWorker().get();
+					if (worker == null) {
+						return "No selected worker";
+					} else if (!StatusPanel.shouldDo(worker, job, 1_000_000)) {
+						return "Illegal assignment";
+					} else {
+						return null;
+					}
+				}).collect();
+		// availableJobs.simpleChanges().act(__ -> System.out.println("Available Jobs=" + availableJobs));
+		SettableValue<Job> addJob = SettableValue.build(Job.class).safe(false).build();
+		bottom.visibleWhen(theUI.getSelectedWorker().map(w -> w != null))
+				.addHPanel(null, //
+						new JustifiedBoxLayout(false).mainJustified().crossJustified(),
+						split2 -> split2.fill().fillV()//
+								.addVPanel(leftPanel -> leftPanel.decorate(deco -> deco.withTitledBorder("Job Preferences", Color.black))//
+										.addTable(theUI.getJobs().getValues().flow().refresh(theUI.getSelectedWorker().noInitChanges())
+												.collect(), this::configurePreferenceTable))//
+								.addVPanel(
+										rightPanel -> rightPanel.decorate(deco -> deco.withTitledBorder("Current Assignments", Color.black))//
+												.addTable(assignments, this::configureAssignmentTable)//
+												.addComboField("Add Assignment:", addJob, availableJobs,
+														combo -> combo.renderAs(job -> job == null ? "" : job.getName()))//
+						));
+		addJob.noInitChanges().act(evt -> {
+			if (evt.getNewValue() == null) {
+				return;
+			}
+			theUI.getSelectedAssignment().get().getAssignments().create()//
+					.with(AssignedJob::getWorker, theUI.getSelectedWorker().get())//
+					.with(AssignedJob::getJob, evt.getNewValue())//
+					.create();
+			EventQueue.invokeLater(() -> addJob.set(null, null));
+		});
+	}
+
+	void configurePreferenceTable(TableBuilder<Job, ?> prefTable) {
+		prefTable.fill().fillV().withColumn("Job", String.class, Job::getName, col -> col.withWidths(50, 150, 250))//
+				.withColumn("Preference", int.class,
+						job -> theUI.getSelectedWorker().get().getJobPreferences().getOrDefault(job, ChoreUtils.DEFAULT_PREFERENCE),
+						col -> col.withMutation(mut -> mut.mutateAttribute((job, pref) -> {
+							theUI.getSelectedWorker().get().getJobPreferences().put(job, pref);
+						}).asText(SpinnerFormat.validate(SpinnerFormat.INT, pref -> {
+							if (pref < 0) {
+								return "No negative preferences";
+							} else if (pref > 10) {
+								return "Preference must be between 0 and 10";
+							}
+							return null;
+						})).clicks(1))//
+		);
+	}
+
+	void configureAssignmentTable(TableBuilder<AssignedJob, ?> table) {
+		table.fill().fillV()//
+				.withItemName("assignment").withNameColumn(assn -> assn.getJob().getName(), null, false, col -> {
+					col.setName("Job").withWidths(50, 150, 250).decorate((cell, deco) -> {
+						Color borderColor;
+						if (cell.getModelValue().getCompletion() == 0) {
+							borderColor = Color.red;
+						} else if (cell.getModelValue().getCompletion() < cell.getModelValue().getJob().getDifficulty()) {
+							borderColor = Color.yellow;
+						} else {
+							borderColor = Color.green;
+						}
+						deco.withLineBorder(borderColor, 2, false);
+					});
+				})//
+				.withColumn("Difficulty", int.class, assn -> assn.getJob().getDifficulty(), null)//
+				.withColumn("Complete", int.class, assn -> assn.getCompletion(), col -> col.withMutation(mut -> {
+					mut.mutateAttribute((assn, complete) -> assn.setCompletion(complete))//
+							.filterAccept((entry, completion) -> {
+								if (completion < 0) {
+									return "Completion cannot be negative";
+								} else if (completion > entry.get().getJob().getDifficulty()) {
+									return "Max completion is the difficulty of the job (" + entry.get().getJob().getDifficulty() + ")";
+								} else {
+									return null;
+								}
+							}).withRowUpdate(true).asText(SpinnerFormat.INT).clicks(1);
+				})//
+				)//
+				.withRemove(jobs -> {
+					theUI.getSelectedAssignment().get().getAssignments().getValues().removeAll(jobs);
+				}, removeAction -> {
+					removeAction.confirmForItems("Delete Assignment(s)?", "Are you sure you want to delete ", "?", true);
+				});
+
 	}
 }

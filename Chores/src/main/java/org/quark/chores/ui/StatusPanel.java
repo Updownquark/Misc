@@ -251,7 +251,7 @@ public class StatusPanel extends JPanel {
 		return message;
 	}
 
-	private static boolean shouldDo(Worker worker, Job job, int workLeft) {
+	public static boolean shouldDo(Worker worker, Job job, int workLeft) {
 		if (worker.getLevel() < job.getMinLevel() || worker.getLevel() > job.getMaxLevel()) {
 			return false;
 		}
