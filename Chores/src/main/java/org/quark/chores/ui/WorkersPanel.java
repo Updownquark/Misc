@@ -71,10 +71,8 @@ public class WorkersPanel extends JPanel {
 	void populateWorkerEditor(PanelPopulator<?, ?> bottom) {
 		ObservableCollection<AssignedJob> allAssignments = ObservableCollection
 				.flattenValue(theUI.getSelectedAssignment().map(assn -> assn == null ? null : assn.getAssignments().getValues()));
-		// allAssignments.simpleChanges().act(__ -> System.out.println("All assignments=" + allAssignments));
 		ObservableCollection<AssignedJob> assignments = allAssignments.flow().refresh(theUI.getSelectedWorker().noInitChanges())
 				.filter(assn -> assn.getWorker() == theUI.getSelectedWorker().get() ? null : "Wrong worker").collect();
-		// assignments.simpleChanges().act(__ -> System.out.println("Assignments=" + assignments));
 		ObservableCollection<Job> availableJobs = theUI.getJobs().getValues().flow().refresh(theUI.getSelectedWorker().noInitChanges())//
 				.whereContained(allAssignments.flow().map(Job.class, AssignedJob::getJob), false)//
 				.filter(job -> {
@@ -87,7 +85,6 @@ public class WorkersPanel extends JPanel {
 						return null;
 					}
 				}).collect();
-		// availableJobs.simpleChanges().act(__ -> System.out.println("Available Jobs=" + availableJobs));
 		SettableValue<Job> addJob = SettableValue.build(Job.class).safe(false).build();
 		bottom.visibleWhen(theUI.getSelectedWorker().map(w -> w != null))
 				.addHPanel(null, //
@@ -117,7 +114,9 @@ public class WorkersPanel extends JPanel {
 	void configurePreferenceTable(TableBuilder<Job, ?> prefTable) {
 		prefTable.fill().fillV().withColumn("Job", String.class, Job::getName, col -> col.withWidths(50, 150, 250))//
 				.withColumn("Preference", int.class,
-						job -> theUI.getSelectedWorker().get().getJobPreferences().getOrDefault(job, ChoreUtils.DEFAULT_PREFERENCE),
+						job -> {
+							return theUI.getSelectedWorker().get().getJobPreferences().getOrDefault(job, ChoreUtils.DEFAULT_PREFERENCE);
+						},
 						col -> col.withMutation(mut -> mut.mutateAttribute((job, pref) -> {
 							theUI.getSelectedWorker().get().getJobPreferences().put(job, pref);
 						}).asText(SpinnerFormat.validate(SpinnerFormat.INT, pref -> {
