@@ -40,7 +40,10 @@ public class JobsPanel extends JPanel {
 							// Haven't done anything with this, so let's just hide it
 							// .withColumn("Multi", int.class, Job::getMultiplicity,
 							// col -> col.withMutation(mut -> mut.mutateAttribute(Job::setMultiplicity).asText(SpinnerFormat.INT)))//
-							.withColumn("Last Done", Instant.class, Job::getLastDone, col -> col.formatText(ChoreUtils.DATE_FORMAT::format))//
+							.withColumn("Last Done", Instant.class, Job::getLastDone,
+									col -> col.withWidths(60, 120, 200).formatText(ChoreUtils.DATE_FORMAT::format)
+											.withMutation(mut -> mut.mutateAttribute(Job::setLastDone).asText(//
+													ChoreUtils.DATE_FORMAT)))//
 							.withColumn("Inclusion Labels", ChoreUtils.LABEL_SET_TYPE, Job::getInclusionLabels,
 									col -> col.formatText(ChoreUtils.LABEL_SET_FORMAT::format)
 											.withMutation(mut -> mut.mutateAttribute((job, labels) -> {

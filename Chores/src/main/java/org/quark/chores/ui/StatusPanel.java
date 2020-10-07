@@ -130,6 +130,7 @@ public class StatusPanel extends JPanel {
 			while (jobIter.hasNext()) {
 				Job job = jobIter.next();
 				if(!job.isActive()){
+					jobIter.remove();
 				} else if (job.getLastDone() == null) {
 					continue;
 				} else if (job.getFrequency() == null

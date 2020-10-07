@@ -2,12 +2,14 @@ package org.quark.chores.ui;
 
 import java.awt.Color;
 import java.awt.EventQueue;
+import java.time.Instant;
 
 import javax.swing.JPanel;
 
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.swing.JustifiedBoxLayout;
+import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.observe.util.swing.PanelPopulation.TableBuilder;
 import org.qommons.StringUtils;
@@ -97,7 +99,32 @@ public class WorkersPanel extends JPanel {
 										rightPanel -> rightPanel.decorate(deco -> deco.withTitledBorder("Current Assignments", Color.black))//
 												.addTable(assignments, this::configureAssignmentTable)//
 												.addComboField("Add Assignment:", addJob, availableJobs,
-														combo -> combo.renderAs(job -> job == null ? "" : job.getName()))//
+														combo -> combo.renderWith(ObservableCellRenderer
+																.<Job, Job> formatted(job -> job == null ? "" : job.getName())//
+																.decorate((cell, deco) -> {
+																	if (cell.getModelValue() == null) {
+																		return;
+																	}
+																	Instant lastDone = cell.getModelValue().getLastDone();
+																	if (lastDone == null) {
+																		deco.withForeground(Color.black);
+																	} else {
+																		Instant due = lastDone.plus(cell.getModelValue().getFrequency());
+																		if (due.compareTo(Instant.now()) <= 0) {
+																			deco.withForeground(Color.black);
+																		} else {
+																			deco.withForeground(Color.gray);
+																		}
+																	}
+																}))//
+																.withValueTooltip(job -> {
+																	Instant lastDone = job.getLastDone();
+																	if (lastDone == null) {
+																		return "Never done";
+																	}
+																	Instant due = lastDone.plus(job.getFrequency());
+																	return "Due " + ChoreUtils.DATE_FORMAT.format(due);
+																}))//
 						));
 		addJob.noInitChanges().act(evt -> {
 			if (evt.getNewValue() == null) {
