@@ -101,12 +101,11 @@ public class StatusPanel extends JPanel {
 				excessPoints.put(worker, worker.getExcessPoints() - worker.getAbility());
 			}
 			for (AssignedJob job : theUI.getSelectedAssignment().get().getAssignments().getValues()) {
-				int lacking = job.getJob().getDifficulty() - job.getCompletion();
 				excessPoints.compute(job.getWorker(), (worker, excess) -> {
 					// Cap the excess point deficit at the worker's ability--don't let the points pile up forever
-					return Math.max(excess - lacking, -worker.getAbility());
+					return Math.max(excess + job.getCompletion(), -worker.getAbility());
 				});
-				if (lacking <= 0) {
+				if (job.getCompletion() >= job.getJob().getDifficulty()) {
 					job.getJob().setLastDone(theUI.getSelectedAssignment().get().getDate());
 				}
 			}

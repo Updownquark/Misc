@@ -51,8 +51,8 @@ public class WorkersPanel extends JPanel {
 													return null;
 												}).asText(ChoreUtils.LABEL_SET_FORMAT));
 									})//
-									.withColumn("Behind", long.class, Worker::getExcessPoints, col -> {
-										col.withHeaderTooltip("The number of points in debt the worker has accumulated");
+									.withColumn("Excess Points", long.class, Worker::getExcessPoints, col -> {
+										col.withHeaderTooltip("The number of points the worker has accumulated beyond expectations");
 										col.withMutation(mut -> mut.asText(SpinnerFormat.LONG).mutateAttribute(Worker::setExcessPoints));
 									})//
 									.withSelection(theUI.getSelectedWorker(), false)//
