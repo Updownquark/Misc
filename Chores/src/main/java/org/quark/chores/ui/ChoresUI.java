@@ -28,10 +28,9 @@ public class ChoresUI extends JPanel {
 	private final SettableValue<Job> theSelectedJob;
 	private final SettableValue<Assignment> theSelectedAssignment;
 
-	private final StatusPanel theStatusPanel;
+	private final AssignmentPanel theAssignmentPanel;
 	private final WorkersPanel theWorkersPanel;
 	private final JobsPanel theJobsPanel;
-	private final JobAdminPanel theAdminPanel;
 
 	public ChoresUI(SyncValueSet<Job> jobs, SyncValueSet<Worker> workers, SyncValueSet<Assignment> assignments, ObservableConfig config) {
 		theJobs = jobs;
@@ -70,10 +69,9 @@ public class ChoresUI extends JPanel {
 			}
 		});
 
-		theStatusPanel = new StatusPanel(this);
+		theAssignmentPanel = new AssignmentPanel(this);
 		theWorkersPanel = new WorkersPanel(this);
 		theJobsPanel = new JobsPanel(this);
-		theAdminPanel = new JobAdminPanel(this);
 
 		initComponents();
 	}
@@ -123,10 +121,9 @@ public class ChoresUI extends JPanel {
 		PanelPopulation.populateVPanel(this, null)//
 				.addTabs(tabs -> {
 					tabs.fill().fillV().withSelectedTab(selectedTab);
-					tabs.withVTab("status", theStatusPanel::addPanel, tab -> tab.setName("Status"));
+					tabs.withVTab("assignments", theAssignmentPanel::addPanel, tab -> tab.setName("Assignments"));
 					tabs.withVTab("workers", theWorkersPanel::addPanel, tab -> tab.setName("Workers"));
 					tabs.withVTab("jobs", theJobsPanel::addPanel, tab -> tab.setName("Jobs"));
-					tabs.withVTab("admin", theAdminPanel::addPanel, tab -> tab.setName("Admin"));
 				});
 	}
 

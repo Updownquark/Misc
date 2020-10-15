@@ -23,10 +23,10 @@ import org.quark.chores.entities.Assignment;
 import org.quark.chores.entities.Job;
 import org.quark.chores.entities.Worker;
 
-public class StatusPanel extends JPanel {
+public class AssignmentPanel extends JPanel {
 	private final ChoresUI theUI;
 
-	public StatusPanel(ChoresUI ui) {
+	public AssignmentPanel(ChoresUI ui) {
 		theUI = ui;
 	}
 

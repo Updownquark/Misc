@@ -81,7 +81,7 @@ public class WorkersPanel extends JPanel {
 					Worker worker = theUI.getSelectedWorker().get();
 					if (worker == null) {
 						return "No selected worker";
-					} else if (!StatusPanel.shouldDo(worker, job, 1_000_000)) {
+					} else if (!AssignmentPanel.shouldDo(worker, job, 1_000_000)) {
 						return "Illegal assignment";
 					} else {
 						return null;
