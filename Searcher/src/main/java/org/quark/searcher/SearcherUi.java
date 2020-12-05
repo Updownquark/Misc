@@ -35,9 +35,9 @@ import org.qommons.QommonsUtils;
 import org.qommons.QommonsUtils.NamedGroupCapture;
 import org.qommons.StringUtils;
 import org.qommons.collect.ElementId;
+import org.qommons.io.ArchiveEnabledFileSource;
 import org.qommons.io.BetterFile;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
-import org.qommons.io.CompressionEnabledFileSource;
 import org.qommons.io.FileUtils;
 import org.qommons.io.Format;
 import org.qommons.io.NativeFileSource;
@@ -158,7 +158,7 @@ public class SearcherUi extends JPanel {
 
 	private final BetterFile.FileFormat theFileFormat;
 	private final BetterFile.FileFormat theTestFileFormat;
-	private final CompressionEnabledFileSource theFileSource;
+	private final ArchiveEnabledFileSource theFileSource;
 	private final SettableValue<BetterFile> theSearchBase;
 	private final SettableValue<Pattern> theFileNamePattern;
 	private final SettableValue<String> theFileNamePatternStr;
@@ -189,8 +189,8 @@ public class SearcherUi extends JPanel {
 	private volatile BetterFile theCurrentSearch;
 
 	public SearcherUi(ObservableConfig config, String workingDir) {
-		theFileSource = new CompressionEnabledFileSource(new NativeFileSource())//
-				.withCompression(new CompressionEnabledFileSource.ZipCompression());
+		theFileSource = new ArchiveEnabledFileSource(new NativeFileSource())//
+				.withArchival(new ArchiveEnabledFileSource.ZipCompression());
 		BetterFile workingDirFile = BetterFile.at(theFileSource, workingDir);
 		theFileFormat = new BetterFile.FileFormat(theFileSource, workingDirFile, false);
 		theTestFileFormat = new BetterFile.FileFormat(theFileSource, theFileFormat.getWorkingDir(), true);
@@ -238,10 +238,10 @@ public class SearcherUi extends JPanel {
 		isSearchingMultipleContentMatches = config.asValue(boolean.class).at("file-content/multiple")
 				.withFormat(Format.BOOLEAN, () -> false).buildValue(null).disableWith(disable);
 		theZipLevel = config.asValue(int.class).at("zip-level").withFormat(Format.INT, () -> 10).buildValue(null);
-		theZipLevel.changes().act(evt -> theFileSource.setMaxZipDepth(evt.getNewValue()));
+		theZipLevel.changes().act(evt -> theFileSource.setMaxArchiveDepth(evt.getNewValue()));
 		SyncValueSet<FileAttributeMapEntry> attrCollection = config.asValue(FileAttributeMapEntry.class).at("file-attributes")
 				.asEntity(null).buildEntitySet(null);
-		theBooleanAttributes = ((ObservableCollection<FileAttributeMapEntry>) attrCollection.getValues()).flow()
+		theBooleanAttributes = attrCollection.getValues().flow()
 				.groupBy(//
 						flow -> flow.map(TypeTokens.get().of(FileBooleanAttribute.class), FileAttributeMapEntry::getAttribute).distinct(),
 						(att, old) -> attrCollection.create().with(FileAttributeMapEntry::getAttribute, att).create().get())//
@@ -587,10 +587,11 @@ public class SearcherUi extends JPanel {
 		});
 		long start = System.currentTimeMillis();
 		boolean succeeded = false;
+		int[] searched = new int[2];
 		try {
 			doSearch(file, filePattern, contentPattern, isSearchingMultipleContentMatches.get(), //
 					new HashMap<>(theBooleanAttributes), () -> rootResult, new PathCharSeq(),
-					new FileContentSeq(theMaxFileMatchLength.get()), false);
+					new FileContentSeq(theMaxFileMatchLength.get()), false, searched);
 			succeeded = true;
 		} finally {
 			long end = System.currentTimeMillis();
@@ -606,7 +607,10 @@ public class SearcherUi extends JPanel {
 				} else if (canceled) {
 					theStatusMessage.set("Canceled search after " + QommonsUtils.printTimeLength(end - start), null);
 				} else {
-					theStatusMessage.set("Completed search in " + QommonsUtils.printTimeLength(end - start), null);
+					theStatusMessage.set("Completed search of "//
+							+ searched[0] + " file" + (searched[0] == 1 ? "" : "s") + " and "//
+							+ searched[1] + " director" + (searched[1] == 1 ? "y" : "ies") + " and "//
+							+ " in " + QommonsUtils.printTimeLength(end - start), null);
 				}
 			});
 		}
@@ -614,7 +618,7 @@ public class SearcherUi extends JPanel {
 
 	void doSearch(BetterFile file, Pattern filePattern, Pattern contentPattern, boolean searchMultiContent, //
 			Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts, Supplier<SearchResultNode> nodeGetter,
-			PathCharSeq pathSeq, FileContentSeq contentSeq, boolean hasMatch) {
+			PathCharSeq pathSeq, FileContentSeq contentSeq, boolean hasMatch, int[] searched) {
 		if (isCanceling) {
 			return;
 		}
@@ -668,6 +672,7 @@ public class SearcherUi extends JPanel {
 		}
 		List<? extends BetterFile> children = file.listFiles();
 		if (children != null) {
+			searched[1]++;
 			for (BetterFile child : children) {
 				if (isCanceling) {
 					return;
@@ -677,8 +682,10 @@ public class SearcherUi extends JPanel {
 						node[0] = nodeGetter.get();
 					}
 					return node[0].getChild(child);
-				}, pathSeq, contentSeq, hasMatch);
+				}, pathSeq, contentSeq, hasMatch, searched);
 			}
+		} else {
+			searched[0]++;
 		}
 	}
 
@@ -821,7 +828,7 @@ public class SearcherUi extends JPanel {
 								.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null)),
 						null)//
 				.spacer(3).addLabel(null, ObservableValue.of("----Excluded File Names---"), Format.TEXT, x -> x.fill())//
-				.addTable((ObservableCollection<PatternConfig>) theExclusionPatterns.getValues(), exclTable -> {
+				.addTable(theExclusionPatterns.getValues(), exclTable -> {
 					exclTable.withColumn("Pattern", String.class, PatternConfig::getPattern,
 							c -> c.withWidths(100, 150, 500).withMutation(m -> m.asText(PATTERN_FORMAT)));
 					exclTable.withColumn("Case", boolean.class, PatternConfig::isCaseSensitive,
