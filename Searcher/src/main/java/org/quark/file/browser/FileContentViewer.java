@@ -19,6 +19,7 @@ import javax.swing.JPanel;
 import org.observe.Observable;
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
+import org.observe.file.ObservableFile;
 import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.ObservableTextArea;
@@ -30,7 +31,7 @@ import org.qommons.io.Format;
 import org.qommons.threading.QommonsTimer;
 
 public class FileContentViewer extends JPanel {
-	private final ObservableValue<BetterFile> theFile;
+	private final ObservableValue<ObservableFile> theFile;
 	private final SettableValue<Long> theStart;
 	private final SettableValue<Long> theEnd;
 	private final SettableValue<Long> theFileSize;
@@ -49,7 +50,7 @@ public class FileContentViewer extends JPanel {
 	private final LinkedList<Long> theScrollPositions;
 	private boolean isControlledSeek;
 
-	public FileContentViewer(ObservableValue<BetterFile> file) {
+	public FileContentViewer(ObservableValue<ObservableFile> file) {
 		theFile = file;
 		theStart = SettableValue.build(long.class).safe(false).withValue(0L).build()//
 				.filterAccept(start -> start < 0 ? "Negative position not acceptable" : null);
