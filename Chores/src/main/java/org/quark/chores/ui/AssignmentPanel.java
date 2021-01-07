@@ -1,6 +1,7 @@
 package org.quark.chores.ui;
 
 import java.awt.Color;
+import java.awt.EventQueue;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,12 +12,15 @@ import java.util.Map;
 
 import javax.swing.JPanel;
 
+import org.observe.SettableValue;
 import org.observe.assoc.ObservableMultiMap;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.JustifiedBoxLayout;
+import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.qommons.BiTuple;
+import org.qommons.QommonsUtils;
 import org.qommons.io.SpinnerFormat;
 import org.quark.chores.entities.AssignedJob;
 import org.quark.chores.entities.Assignment;
@@ -41,6 +45,7 @@ public class AssignmentPanel extends JPanel {
 				tx -> tx.nullToNull(true).map(asn -> asn.getDate())), ChoreUtils.DATE_FORMAT, null);
 		panel.addTable(assignmentsByWorker.observeSingleEntries(), table -> {
 			table.fill().fillV()//
+					.withItemName("Assignment")//
 					.withColumn("Worker", String.class, entry -> entry.getKey().getName(), null)//
 					.withColumn("Job", String.class, entry -> entry.getValue().getJob().getName(), col -> {
 						col.withWidths(50, 150, 250).decorate((cell, deco) -> {
@@ -69,12 +74,79 @@ public class AssignmentPanel extends JPanel {
 									}
 								}).withRowUpdate(true).asText(SpinnerFormat.INT).clicks(1);
 					}))//
+					.withRemove(entries -> {
+						List<AssignedJob> jobs = QommonsUtils.map(entries, entry -> entry.getValue(), false);
+						theUI.getSelectedAssignment().get().getAssignments().getValues().removeAll(jobs);
+					}, removeAction -> {
+						removeAction.confirmForItems("Delete Assignment(s)?", "Are you sure you want to delete ", "?", true);
+					})//
 			;
 		});
+		panel.addHPanel("Add Assignment:", "box", this::configureAddAssignmentPanel);
 		panel.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(), p -> {
 			p.addButton("New Assignment", __ -> createNewAssignments(panel), btn -> btn.withTooltip("Creates a new set of assignments"));
 			p.addButton("Clear", __ -> clearAssignments(panel),
 					btn -> btn.withTooltip("Clears the current set of assignments with no consequences to the workers"));
+		});
+	}
+
+	private void configureAddAssignmentPanel(PanelPopulator<?, ?> panel) {
+		ObservableCollection<AssignedJob> allAssignments = ObservableCollection
+				.flattenValue(theUI.getSelectedAssignment().map(assn -> assn == null ? null : assn.getAssignments().getValues()));
+		SettableValue<Worker> selectedWorker = theUI.getSelectedWorker();
+		ObservableCollection<Job> availableJobs = theUI.getJobs().getValues().flow().refresh(selectedWorker.noInitChanges())//
+				.whereContained(allAssignments.flow().map(Job.class, AssignedJob::getJob), false)//
+				.filter(job -> {
+					Worker worker = selectedWorker.get();
+					if (worker == null) {
+						return "No selected worker";
+					} else if (!AssignmentPanel.shouldDo(worker, job, 1_000_000)) {
+						return "Illegal assignment";
+					} else {
+						return null;
+					}
+				}).collect();
+		SettableValue<Job> addJob = SettableValue.build(Job.class).safe(false).build()//
+				.disableWith(selectedWorker.map(w -> w == null ? "First, select the worker to assign the job to" : null))//
+				.disableWith(theUI.getSelectedAssignment().map(a -> a == null ? "No assignment" : null));
+		panel.addComboField(null, selectedWorker, theUI.getWorkers().getValues(),
+				combo -> combo.renderAs(w -> w == null ? "Select Worker" : w.getName()));
+		panel.addComboField(null, addJob, availableJobs,
+				combo -> combo.renderWith(ObservableCellRenderer.<Job, Job> formatted(job -> job == null ? "Select New Job" : job.getName())//
+						.decorate((cell, deco) -> {
+							if (cell.getModelValue() == null) {
+								return;
+							}
+							Instant lastDone = cell.getModelValue().getLastDone();
+							if (lastDone == null) {
+								deco.withForeground(Color.black);
+							} else {
+								Instant due = lastDone.plus(cell.getModelValue().getFrequency());
+								if (due.compareTo(Instant.now()) <= 0) {
+									deco.withForeground(Color.black);
+								} else {
+									deco.withForeground(Color.gray);
+								}
+							}
+						}))//
+						.withValueTooltip(job -> {
+							Instant lastDone = job.getLastDone();
+							if (lastDone == null) {
+								return "Never done";
+							}
+							Instant due = lastDone.plus(job.getFrequency());
+							return "Due " + ChoreUtils.DATE_FORMAT.format(due);
+						}))//
+		;
+		addJob.noInitChanges().act(evt -> {
+			if (evt.getNewValue() == null) {
+				return;
+			}
+			theUI.getSelectedAssignment().get().getAssignments().create()//
+					.with(AssignedJob::getWorker, selectedWorker.get())//
+					.with(AssignedJob::getJob, evt.getNewValue())//
+					.create();
+			EventQueue.invokeLater(() -> addJob.set(null, null));
 		});
 	}
 
@@ -128,7 +200,7 @@ public class AssignmentPanel extends JPanel {
 			Iterator<Job> jobIter = allJobs.iterator();
 			while (jobIter.hasNext()) {
 				Job job = jobIter.next();
-				if(!job.isActive()){
+				if (!job.isActive()) {
 					jobIter.remove();
 				} else if (job.getLastDone() == null) {
 					continue;
@@ -180,7 +252,7 @@ public class AssignmentPanel extends JPanel {
 				if (pref < minPref) {
 					minPref = pref;
 				} else if (pref > maxPref) {
-					maxPref=pref;
+					maxPref = pref;
 				}
 			}
 			preferenceRanges.put(worker, new BiTuple<>(minPref, maxPref));

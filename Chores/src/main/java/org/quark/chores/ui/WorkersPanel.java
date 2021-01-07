@@ -87,7 +87,8 @@ public class WorkersPanel extends JPanel {
 						return null;
 					}
 				}).collect();
-		SettableValue<Job> addJob = SettableValue.build(Job.class).safe(false).build();
+		SettableValue<Job> addJob = SettableValue.build(Job.class).safe(false).build()//
+				.disableWith(theUI.getSelectedAssignment().map(a -> a == null ? "No assignment" : null));
 		bottom.visibleWhen(theUI.getSelectedWorker().map(w -> w != null))
 				.addHPanel(null, //
 						new JustifiedBoxLayout(false).mainJustified().crossJustified(),
@@ -100,7 +101,7 @@ public class WorkersPanel extends JPanel {
 												.addTable(assignments, this::configureAssignmentTable)//
 												.addComboField("Add Assignment:", addJob, availableJobs,
 														combo -> combo.renderWith(ObservableCellRenderer
-																.<Job, Job> formatted(job -> job == null ? "" : job.getName())//
+																.<Job, Job> formatted(job -> job == null ? "Select New Job" : job.getName())//
 																.decorate((cell, deco) -> {
 																	if (cell.getModelValue() == null) {
 																		return;
