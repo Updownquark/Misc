@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="jar" name="Create Runnable Jar for Project HypNotiQ">
+    <!--this file was created by Eclipse Runnable JAR Export Wizard-->
+    <!--ANT 1.7 is required                                        -->
+    <!--define folder properties-->
+	<property name="app.name" value="HypNotiQ" />
+	<property name="app.short.name" value="${app.name}" />
+	<property name="app.vendor" value="Updownquark" />
+	<property name="app.version" value="0.0.2" />
+	<property name="app.descrip" value="An app for keeping notes and setting reminders" />
+	<property name="main.class" value="org.quark.hypnotiq.HypNotiQMain"/>
+
+    <property name="dir.buildfile" value="."/>
+    <property name="dir.workspace" value="../.."/>
+    <property name="dir.jarfile" value="${dir.buildfile}/target/deploy"/>
+	<property name="jar.file" value="${dir.jarfile}/${app.short.name}.jar" />
+    <target name="jar">
+        <jar destfile="${jar.file}" filesetmanifest="mergewithoutmain">
+            <manifest>
+                <attribute name="Main-Class" value="${main.class}"/>
+                <attribute name="Class-Path" value="."/>
+            	<!--<attribute name="SplashScreen-Image" value="??.png"/>-->
+            	<section name="org/quark/ogame/uni/ui/">
+	            	<attribute name="Specification-Title" value="${app.name}" />
+            		<attribute name="Specification-Version" value="0.0.0" />
+            		<attribute name="Specification-Vendor" value="${app.vendor}" />
+            		<attribute name="Implementation-Title" value="org.quark.ogame.uni.ui" />
+            		<attribute name="Implementation-Version" value="${app.version}" />
+            	</section>
+            </manifest>
+            <fileset dir="${dir.buildfile}/target/classes"/>
+            <fileset dir="${dir.workspace}/Qommons/classes"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/log4j-1.2.13.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/servlet-api.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/jdom-2.0.1.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/hamcrest-core-1.3.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/junit-4.11.jar"/>
+            <fileset dir="${dir.workspace}/ObServe/classes"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/guava-18.0.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-core-4.2.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-swing-4.2.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/swingx-1.6.jar"/>
+            <fileset dir="${dir.workspace}/ObServe-ext/target/classes"/>
+        </jar>
+    </target>
+</project>

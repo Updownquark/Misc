@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -73,6 +72,9 @@ import org.quark.hypnotiq.entities.Notification;
 import org.quark.hypnotiq.entities.Subject;
 
 public class HypNotiQMain extends JPanel {
+	private static final SpinnerFormat<Instant> DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
+			TimeZone.getDefault(), TimeUtils.DateElementType.Second, false);
+
 	private final ObservableConfig theConfig;
 	private final ObservableConfigParseSession theSession;
 	private final SyncValueSet<Subject> theSubjects;
@@ -268,6 +270,12 @@ public class HypNotiQMain extends JPanel {
 					isRef = true;
 				}
 			}
+			if (refName.length() > 0) {
+				Subject sub = theSubjectByRefString.get(refName.toString());
+				if (sub != null) {
+					refs.add(sub);
+				}
+			}
 			boolean[] modified = new boolean[1];
 			CollectionUtils.synchronize(evt.getNewValue().getReferences(), new ArrayList<>(refs))//
 					.simple(s -> s).rightOrder().commonUsesLeft().onLeft(left -> {
@@ -275,14 +283,7 @@ public class HypNotiQMain extends JPanel {
 						left.getLeftValue().getReferences().remove(evt.getNewValue());
 					}).onRight(right -> {
 						modified[0] = true;
-						int index = Collections.binarySearch(right.getRightValue().getReferences(), evt.getNewValue(), (note1, note2) -> {
-							return note2.getOccurred().compareTo(note1.getOccurred());
-						});
-						if (index < 0) {
-							right.getRightValue().getReferences().add(-index - 1, evt.getNewValue());
-						} else {
-							right.getRightValue().getReferences().add(index, evt.getNewValue());
-						}
+						right.getRightValue().getReferences().add(evt.getNewValue());
 					}).adjust();
 		});
 
@@ -349,8 +350,10 @@ public class HypNotiQMain extends JPanel {
 				theTrayIcon.displayMessage(currentNotifications.size() + " Notifications", msg.toString(), MessageType.INFO);
 			}
 
-			if (!currentNotifications.isEmpty() && (nextAlert == null || nextAlert.compareTo(now.plus(theReNotifyDuration)) > 0)) {
-				nextAlert = now.plus(theReNotifyDuration);
+			if (!currentNotifications.isEmpty()) {
+				if (nextAlert == null || nextAlert.compareTo(now.plus(theReNotifyDuration)) > 0) {
+					nextAlert = now.plus(theReNotifyDuration);
+				}
 				if (!hasSnoozeAll) {
 					MenuItem item = new MenuItem("Snooze All 5 min");
 					item.addActionListener(evt -> {
@@ -367,6 +370,7 @@ public class HypNotiQMain extends JPanel {
 						processNotifications();
 					});
 					thePopup.add(item);
+					hasSnoozeAll = true;
 				}
 			} else if (hasSnoozeAll) {
 				for (int i = 0; i < thePopup.getItemCount(); i++) {
@@ -375,6 +379,7 @@ public class HypNotiQMain extends JPanel {
 						thePopup.remove(i);
 						break;
 					}
+					hasSnoozeAll = false;
 				}
 			}
 
@@ -485,9 +490,10 @@ public class HypNotiQMain extends JPanel {
 		subjectsTab//
 				.addTextField(null, filter, TableContentControl.FORMAT,
 						tf -> tf.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP)
-								.modifyEditor(tf2 -> tf2.setEmptyText("Search...")))//
+								.modifyEditor(tf2 -> tf2.setEmptyText("Search...").setCommitOnType(true)))//
 				.addTable(theSubjects.getValues(), table -> {
 					table.fill().fillV()//
+							.withFiltering(filter)//
 							.withItemName("Subject")//
 							.withNameColumn(Subject::getName, Subject::setName, true, col -> col.withWidths(50, 120, 300))//
 							.withColumn("Last Mentioned", Instant.class, subject -> {
@@ -566,20 +572,20 @@ public class HypNotiQMain extends JPanel {
 		notesTab//
 				.addTextField(null, filter, TableContentControl.FORMAT,
 						tf -> tf.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP)
-								.modifyEditor(tf2 -> tf2.setEmptyText("Search...")))//
+								.modifyEditor(tf2 -> tf2.setEmptyText("Search...").setCommitOnType(true)))//
 				.addTable(theNotes.getValues(), table -> {
 					table.fill().fillV()//
+							.withFiltering(filter)//
 							.withItemName("Notes")//
-							.withNameColumn(Note::getName, (note, name) -> {
-								note.setName(name);
-								note.setModified(Instant.now());
-							}, false, col -> col.withWidths(50, 120, 300))//
+							.withNameColumn(Note::getName, null/*(note, name) -> { //Notes not editable here
+																note.setName(name);
+																note.setModified(Instant.now());
+																}*/, false, col -> col.withWidths(50, 120, 300))//
 							.withColumn("Occurred", Instant.class, Note::getOccurred,
-									col -> col.withMutation(mut -> mut.mutateAttribute((note, occurred) -> {
-										note.setOccurred(occurred);
-										note.setModified(Instant.now());
-									}).asText(SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy", TimeZone.getDefault(),
-											TimeUtils.DateElementType.Second, false))).withWidths(100, 150, 300))//
+									col -> col/*.withMutation(mut -> mut.mutateAttribute((note, occurred) -> {
+												note.setOccurred(occurred);
+												note.setModified(Instant.now());
+												}).asText(DATE_FORMAT))*/.withWidths(100, 150, 300))//
 							.withColumn("Content", String.class, Note::getContent, null)//
 							.withColumn("References", String.class, //
 									note -> StringUtils.print(", ", note.getReferences(), String::valueOf).toString(), null)//
@@ -602,12 +608,12 @@ public class HypNotiQMain extends JPanel {
 									}).asCombo(NoteStatus::name, ObservableCollection.of(NoteStatus.class, NoteStatus.values()))))//
 							.withColumn("Noted", Instant.class, Note::getNoted,
 									col -> col.withWidths(100, 150, 300)
-											.withMutation(mut -> mut.asText(SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
-													TimeZone.getDefault(), TimeUtils.DateElementType.Second, false))))//
+											.formatText(t -> QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
+													QommonsUtils.TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)))//
 							.withColumn("Modified", Instant.class, Note::getNoted,
 									col -> col.withWidths(100, 150, 300)
-											.withMutation(mut -> mut.asText(SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
-													TimeZone.getDefault(), TimeUtils.DateElementType.Second, false))))//
+											.formatText(t -> QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
+													QommonsUtils.TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)))//
 							.withMouseListener(new ObservableTableModel.RowMouseAdapter<Note>() {
 								@Override
 								public void mouseClicked(ModelRow<? extends Note> row, MouseEvent e) {
@@ -649,9 +655,10 @@ public class HypNotiQMain extends JPanel {
 		notificationsTab//
 				.addTextField(null, filter, TableContentControl.FORMAT,
 						tf -> tf.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP)
-								.modifyEditor(tf2 -> tf2.setEmptyText("Search...")))//
+								.modifyEditor(tf2 -> tf2.setEmptyText("Search...").setCommitOnType(true)))//
 				.addTable(theActiveNotifications, table -> {
 					table.fill().fillV()//
+							.withFiltering(filter)//
 							.withItemName("Notification")//
 							.withSelection(theSelectedNotification, false)//
 							.withColumn("Note", String.class, not -> not.getNotification().getNote().getName(), null)//
@@ -709,7 +716,7 @@ public class HypNotiQMain extends JPanel {
 					not.getNotification().getNote().setModified(Instant.now());
 					processNotifications();
 				}).asText(SpinnerFormat.forAdjustable(TimeUtils::parseDuration)).filterAccept((el, d) -> {
-					if (d.signum() <= 0) {
+					if (d != null && d.signum() <= 0) {
 						return "Recurrence must be positive";
 					}
 					return null;
@@ -767,6 +774,7 @@ public class HypNotiQMain extends JPanel {
 							not.getNotification().setSnoozeTime(now.plus(duration));
 						} else if (action.equals("Dismiss")) {
 							not.getNotification().setSnoozeTime(null);
+							not.getNotification().setSnoozeCount(0);
 							not.getNotification().setLastAlertTime(now);
 						} else if (action.equals("Skip Next")) {
 							theNotificationCallbackLock = true;
@@ -797,6 +805,15 @@ public class HypNotiQMain extends JPanel {
 						not.refresh();
 						theNotifications.mutableElement(not.theElement).set(not);
 						processNotifications();
+					}).editableIf((not, __) -> {
+						if (not.getNextAlertTime() == null) {
+							return false;
+						} else if (not.getNextAlertTime().compareTo(Instant.now()) > 0
+								&& not.getNotification().getRecurInterval() == null) {
+							return false;
+						} else {
+							return true;
+						}
 					}).asCombo(s -> s, (not, __) -> {
 						if (not.getModelValue().getNextAlertTime().compareTo(Instant.now()) <= 0) {
 							return ObservableCollection.of(String.class, "Snooze 5 min", "Snooze 30 min", "Snooze 1 hour", "Snooze...",
@@ -804,8 +821,11 @@ public class HypNotiQMain extends JPanel {
 						} else if (not.getModelValue().getNotification().getSnoozeTime() != null
 								&& not.getModelValue().getNotification().getSnoozeTime().compareTo(Instant.now()) > 0) {
 							return ObservableCollection.of(String.class, "Dismiss");
-						} else {
+						} else if (not.getModelValue().getNextAlertTime() != null
+								&& not.getModelValue().getNotification().getRecurInterval() != null) {
 							return ObservableCollection.of(String.class, "Skip Next");
+						} else {
+							return ObservableCollection.of(String.class);
 						}
 					}).clicks(1);
 				}))//
@@ -813,9 +833,46 @@ public class HypNotiQMain extends JPanel {
 	}
 
 	private void populateSubjectEditor(PanelPopulator<?, ?> panel, Subject value) {
-		// TODO Timeline
-		// As vertically-laid out cards
-		// entries of type "Note" can be edited
+		ObservableSortedCollection<Note> references = value.getReferences().flow().sorted((n1, n2) -> {
+			int comp = n1.getOccurred().compareTo(n2.getOccurred());
+			if (comp == 0) {
+				comp = n1.getModified().compareTo(n2.getModified());
+			}
+			return -comp;
+		}).collect();
+
+		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class).safe(false)
+				.withValue(TableContentControl.DEFAULT).build();
+		panel//
+				.addTextField(null, filter, TableContentControl.FORMAT,
+						tf -> tf.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP)
+								.modifyEditor(tf2 -> tf2.setEmptyText("Search...").setCommitOnType(true)))//
+				.addTable(references, table -> {
+					table.fill().fillV()//
+							.withFiltering(filter)//
+							.withItemName("Notes")//
+							.withNameColumn(Note::getName, null/*(note, name) -> { //Notes not editable here
+																note.setName(name);
+																note.setModified(Instant.now());
+																}*/, false, col -> col.withWidths(50, 120, 300))//
+							.withColumn("Occurred", Instant.class, Note::getOccurred,
+									col -> col/*.withMutation(mut -> mut.mutateAttribute((note, occurred) -> {
+												note.setOccurred(occurred);
+												note.setModified(Instant.now());
+												}).asText(DATE_FORMAT))*/.withWidths(100, 150, 300))//
+							.withColumn("Content", String.class, Note::getContent, col -> col.withWidths(50, 400, 2000))//
+							.withMouseListener(new ObservableTableModel.RowMouseAdapter<Note>() {
+								@Override
+								public void mouseClicked(ModelRow<? extends Note> row, MouseEvent e) {
+									if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
+										selectNote(row.getModelValue());
+									}
+								}
+							})//
+							.withSelection(theSelectedNote, false)//
+					// TODO
+					;
+				});
 	}
 
 	private void populateNoteEditor(PanelPopulator<?, ?> panel, Note value) {
@@ -828,13 +885,14 @@ public class HypNotiQMain extends JPanel {
 					}
 					return null;
 				}), SpinnerFormat.NUMERICAL_TEXT, tf -> tf.fill())//
+				.addTextField("Occurred", EntityReflector.observeField(value, Note::getOccurred), DATE_FORMAT, tf -> tf.fill())//
 				.addComboField("Status", EntityReflector.observeField(value, Note::getStatus), null, NoteStatus.values())//
 				.addTextArea(null, EntityReflector.observeField(value, Note::getContent), Format.TEXT,
 						tf -> tf.fill().fillV().modifyEditor(ta -> ta.withRows(8)))//
 				.addTable(activeNots, notifications -> {
 					notifications.fill().withItemName("Notification");
 					populateNotificationTable(notifications, panel.getContainer());
-					notifications.withAdaptiveHeight(2, 2, 5);
+					notifications.withAdaptiveHeight(2, 4, 10);
 					notifications.withAdd(() -> {
 						Calendar time = Calendar.getInstance();
 						time.set(Calendar.SECOND, 0);
@@ -913,6 +971,7 @@ public class HypNotiQMain extends JPanel {
 		})).withBackups(backups -> backups.withBackupSize(1_000_000, 100_000_000).withDuration(Duration.ofDays(1), Duration.ofDays(30))
 				.withBackupCount(10, 100))//
 				.systemLandF()//
+				.withVisible(SettableValue.build(boolean.class).safe(false).withValue(false).build())// Not shown initially
 				.build((config, onBuilt) -> {
 					try {
 						new GitHubApiHelper("Updownquark", "Misc").withTagPattern("HypNotiQ-.*").checkForNewVersion(HypNotiQMain.class,
@@ -923,8 +982,10 @@ public class HypNotiQMain extends JPanel {
 									ObservableConfigParseSession session = new ObservableConfigParseSession();
 									ValueHolder<SyncValueSet<Subject>> subjects = new ValueHolder<>();
 									ValueHolder<SyncValueSet<Note>> notes = new ValueHolder<>();
-									getSubjects(config, session, subjects, notes);
-									getNotes(config, session, subjects, notes);
+									SimpleObservable<Void> built = SimpleObservable.build().safe(false).build();
+									getSubjects(config, session, subjects, notes, built);
+									getNotes(config, session, subjects, notes, built);
+									built.onNext(null);
 									onBuilt.accept(new HypNotiQMain(config, session, subjects.get(), notes.get()));
 								});
 					} catch (IOException e) {
@@ -935,25 +996,27 @@ public class HypNotiQMain extends JPanel {
 	}
 
 	private static void getSubjects(ObservableConfig config, ObservableConfigParseSession session,
-			ValueHolder<SyncValueSet<Subject>> subjects, ValueHolder<SyncValueSet<Note>> notes) {
+			ValueHolder<SyncValueSet<Subject>> subjects, ValueHolder<SyncValueSet<Note>> notes, SimpleObservable<Void> built) {
 		config.asValue(Subject.class).at("subjects/subject").withSession(session).asEntity(subjectFormat -> {
 			ObservableConfigFormat<Note> noteRefFormat = ObservableConfigFormat.buildReferenceFormat(__ -> notes.get().getValues(), null)
+					.withRetrieverReady(() -> notes.get() != null)//
 					.withField("id", Note::getId, ObservableConfigFormat.LONG).build();
 			subjectFormat.withFieldFormat(Subject::getReferences, ObservableConfigFormat.ofCollection(//
 					TypeTokens.get().keyFor(List.class).<List<Note>> parameterized(Note.class), noteRefFormat, "references", "note"));
-		}).buildEntitySet(subjects);
+		}).withBuiltNotifier(built).buildEntitySet(subjects);
 	}
 
 	private static void getNotes(ObservableConfig config, ObservableConfigParseSession session, ValueHolder<SyncValueSet<Subject>> subjects,
-			ValueHolder<SyncValueSet<Note>> notes) {
+			ValueHolder<SyncValueSet<Note>> notes, SimpleObservable<Void> built) {
 		config.asValue(Note.class).at("notes/note").withSession(session).asEntity(noteFormat -> {
 			ObservableConfigFormat<Subject> subjectRefFormat = ObservableConfigFormat
 					.buildReferenceFormat(__ -> subjects.get().getValues(), null)
+					.withRetrieverReady(() -> subjects.get() != null)//
 					.withField("id", Subject::getId, ObservableConfigFormat.LONG).build();
 			noteFormat.withFieldFormat(Note::getReferences, ObservableConfigFormat.ofCollection(//
 					TypeTokens.get().keyFor(List.class).<List<Subject>> parameterized(Subject.class), subjectRefFormat, "references",
 					"subject"));
-		}).buildEntitySet(notes);
+		}).withBuiltNotifier(built).buildEntitySet(notes);
 	}
 
 	public static class ActiveNotification implements Comparable<ActiveNotification> {
