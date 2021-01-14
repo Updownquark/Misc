@@ -57,7 +57,6 @@ import org.qommons.QommonsUtils;
 import org.qommons.QommonsUtils.TimePrecision;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
-import org.qommons.TimeUtils.DateElementType;
 import org.qommons.TimeUtils.ParsedDuration;
 import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
@@ -72,8 +71,10 @@ import org.quark.hypnotiq.entities.Notification;
 import org.quark.hypnotiq.entities.Subject;
 
 public class HypNotiQMain extends JPanel {
-	private static final SpinnerFormat<Instant> DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
-			TimeZone.getDefault(), TimeUtils.DateElementType.Second, false);
+	private static final SpinnerFormat<Instant> FUTURE_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
+			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.FUTURE));
+	private static final SpinnerFormat<Instant> PAST_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
+			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.PAST));
 
 	private final ObservableConfig theConfig;
 	private final ObservableConfigParseSession theSession;
@@ -374,13 +375,13 @@ public class HypNotiQMain extends JPanel {
 				}
 			} else if (hasSnoozeAll) {
 				for (int i = 0; i < thePopup.getItemCount(); i++) {
-					String name = thePopup.getItem(i).getName();
+					String name = thePopup.getItem(i).getLabel();
 					if (name.equals("Snooze All 5 min")) {
 						thePopup.remove(i);
 						break;
 					}
-					hasSnoozeAll = false;
 				}
+				hasSnoozeAll = false;
 			}
 
 			if (nextAlert != null) {
@@ -693,8 +694,7 @@ public class HypNotiQMain extends JPanel {
 							mut.mutateAttribute((not, time) -> {
 								not.getNotification().setInitialTime(time);
 								not.getNotification().getNote().setModified(Instant.now());
-							}).asText(SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy", TimeZone.getDefault(),
-									DateElementType.Second, false));
+							}).asText(FUTURE_DATE_FORMAT);
 						}).decorate((cell, deco) -> {
 							boolean notified = cell.getModelValue().getNextAlertTime().compareTo(Instant.now()) <= 0;
 							if (notified) {
@@ -712,7 +712,7 @@ public class HypNotiQMain extends JPanel {
 						return null;
 					}
 				}, col -> col.withMutation(mut -> mut.mutateAttribute((not, interval) -> {
-					not.getNotification().setRecurInterval(interval.toString());
+					not.getNotification().setRecurInterval(interval == null ? null : interval.toString());
 					not.getNotification().getNote().setModified(Instant.now());
 					processNotifications();
 				}).asText(SpinnerFormat.forAdjustable(TimeUtils::parseDuration)).filterAccept((el, d) -> {
@@ -725,8 +725,7 @@ public class HypNotiQMain extends JPanel {
 						col -> col.withWidths(100, 150, 300).withMutation(mut -> mut.mutateAttribute((not, end) -> {
 							not.getNotification().setEndTime(end);
 							not.getNotification().getNote().setModified(Instant.now());
-						}).asText(SpinnerFormat.flexDate(Instant::now, "EEE MMM dd yyyy", TimeZone.getDefault(), DateElementType.Second,
-								false))))
+						}).asText(FUTURE_DATE_FORMAT)))
 				.withColumn("Snoozed", Integer.class, n -> n.getNotification().getSnoozeCount(), col -> col.formatText(s -> {
 					switch (s) {
 					case 0:
@@ -779,21 +778,36 @@ public class HypNotiQMain extends JPanel {
 						} else if (action.equals("Skip Next")) {
 							theNotificationCallbackLock = true;
 							try {
-								Instant preLast = not.getNotification().getLastAlertTime();
-								not.getNotification().setLastAlertTime(not.getNextAlertTime());
+								Instant next, preNext;
+								next = preNext = not.getNextAlertTime();
+								if (next == null) {
+									return;
+								}
+								Instant preOrig = not.getNotification().getInitialTime();
+								not.getNotification().setInitialTime(next);
 								not.refresh();
-								not.getNotification().setLastAlertTime(preLast);
+								next = not.getNextAlertTime();
+								if (next == null) { // ??
+									not.getNotification().setInitialTime(preOrig);
+									return;
+								}
+								next = not.getNextAlertTime();
+								not.getNotification().setInitialTime(preOrig); // Restore
+								not.refresh();
+								if (next == null) {// ??
+									return;
+								}
 								if (table.alert("Skip Next Alert?", "Skip the next alert for " + not.getNotification().getName() + " at "
-										+ QommonsUtils.printRelativeTime(not.getNextAlertTime().toEpochMilli(), now.toEpochMilli(),
+										+ QommonsUtils.printRelativeTime(preNext.toEpochMilli(), now.toEpochMilli(),
 												TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)
-										+ " (" + QommonsUtils.printDuration(TimeUtils.between(now, not.getNextAlertTime()), false)
+										+ " (" + QommonsUtils.printDuration(TimeUtils.between(now, preNext), false)
 										+ " from now)?\n"//
 										+ "The next alert would then be at "
-										+ QommonsUtils.printRelativeTime(not.getNextAlertTime().toEpochMilli(), now.toEpochMilli(),
+										+ QommonsUtils.printRelativeTime(next.toEpochMilli(), now.toEpochMilli(),
 												TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)
-										+ " (" + QommonsUtils.printDuration(TimeUtils.between(now, not.getNextAlertTime()), false)
+										+ " (" + QommonsUtils.printDuration(TimeUtils.between(now, next), false)
 										+ " from now).").confirm(true)) {
-									not.getNotification().setInitialTime(not.getNextAlertTime());
+									not.getNotification().setInitialTime(next);
 									not.refresh();
 								} else {
 									return;
@@ -885,7 +899,7 @@ public class HypNotiQMain extends JPanel {
 					}
 					return null;
 				}), SpinnerFormat.NUMERICAL_TEXT, tf -> tf.fill())//
-				.addTextField("Occurred", EntityReflector.observeField(value, Note::getOccurred), DATE_FORMAT, tf -> tf.fill())//
+				.addTextField("Occurred", EntityReflector.observeField(value, Note::getOccurred), PAST_DATE_FORMAT, tf -> tf.fill())//
 				.addComboField("Status", EntityReflector.observeField(value, Note::getStatus), null, NoteStatus.values())//
 				.addTextArea(null, EntityReflector.observeField(value, Note::getContent), Format.TEXT,
 						tf -> tf.fill().fillV().modifyEditor(ta -> ta.withRows(8)))//
