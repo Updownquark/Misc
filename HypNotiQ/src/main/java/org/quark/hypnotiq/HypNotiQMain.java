@@ -14,10 +14,14 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,6 +29,7 @@ import java.util.Set;
 import java.util.TimeZone;
 
 import javax.swing.BorderFactory;
+import javax.swing.CellEditor;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -38,6 +43,7 @@ import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedCollection;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
+import org.observe.config.ObservableConfigFormat.EntityConfigFormat;
 import org.observe.config.ObservableConfigParseSession;
 import org.observe.config.SyncValueSet;
 import org.observe.ext.util.GitHubApiHelper;
@@ -57,6 +63,7 @@ import org.qommons.QommonsUtils;
 import org.qommons.QommonsUtils.TimePrecision;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
+import org.qommons.TimeUtils.DurationComponentType;
 import org.qommons.TimeUtils.ParsedDuration;
 import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
@@ -70,6 +77,7 @@ import org.quark.hypnotiq.entities.NoteStatus;
 import org.quark.hypnotiq.entities.Notification;
 import org.quark.hypnotiq.entities.Subject;
 
+/** A note-taking app that facilitates very flexible, very persistent notifications */
 public class HypNotiQMain extends JPanel {
 	private static final SpinnerFormat<Instant> FUTURE_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
 			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.FUTURE));
@@ -88,6 +96,7 @@ public class HypNotiQMain extends JPanel {
 
 	private final TrayIcon theTrayIcon;
 	private final PopupMenu thePopup;
+	private final MenuItem theSnoozeAllItem;
 	private boolean hasSnoozeAll;
 	private Duration theReNotifyDuration = Duration.ofMinutes(1);
 	private boolean theNotificationCallbackLock;
@@ -108,6 +117,16 @@ public class HypNotiQMain extends JPanel {
 	private PanelPopulation.TabPaneEditor<?, ?> theSubjectTabs;
 	private PanelPopulation.TabPaneEditor<?, ?> theNoteTabs;
 
+	/**
+	 * @param config
+	 *            The config to store UI settings and the source of the entities
+	 * @param session
+	 *            The parse session used for entity parsing
+	 * @param subjects
+	 *            The configured {@link Subject} set
+	 * @param notes
+	 *            The configured {@link Note} set
+	 */
 	public HypNotiQMain(ObservableConfig config, ObservableConfigParseSession session, SyncValueSet<Subject> subjects,
 			SyncValueSet<Note> notes) {
 		theConfig = config;
@@ -136,7 +155,7 @@ public class HypNotiQMain extends JPanel {
 			}
 		}
 		theAlertTask = QommonsTimer.getCommonInstance().build(this::processNotifications, null, false).onEDT();
-		// Watch for notification changes
+		// Watch for entity changes
 		theConfig.watch(theConfig.buildPath(ObservableConfig.ANY_NAME).multi(true).build()).act(evt -> {
 			if (theNotificationCallbackLock) {
 				return;
@@ -147,7 +166,7 @@ public class HypNotiQMain extends JPanel {
 				for (ObservableConfig target : evt.relativePath.reverse()) {
 					if (target.getName().equals("notification")) {
 						Notification notification = (Notification) target.getParsedItem(theSession);
-						if (notification == null) {
+						if (notification == null || EntityConfigFormat.getConfig(notification) != target) {
 							return;
 						}
 						ActiveNotification found = null;
@@ -171,12 +190,9 @@ public class HypNotiQMain extends JPanel {
 						}
 						break;
 					} else if (terminal && evt.changeType == CollectionChangeType.remove && target.getName().equals("note")) {
-						if (evt.changeType != CollectionChangeType.remove) {
-							return;
-						}
 						Note note = (Note) target.getParsedItem(theSession);
-						if (note == null) {
-							return;
+						if (note == null || EntityConfigFormat.getConfig(note) != target) {
+							continue;
 						}
 						for (Notification notification : note.getNotifications().getValues()) {
 							for (ActiveNotification an : theActiveNotifications) {
@@ -185,7 +201,18 @@ public class HypNotiQMain extends JPanel {
 								}
 							}
 						}
+						for (Subject ref : note.getReferences()) {
+							ref.getReferences().remove(note);
+						}
 						break;
+					} else if (terminal && evt.changeType == CollectionChangeType.remove && target.getName().equals("subject")) {
+						Subject subject = (Subject) target.getParsedItem(theSession);
+						if (subject == null || EntityConfigFormat.getConfig(subject) != target) {
+							continue;
+						}
+						for (Note ref : subject.getReferences()) {
+							scrubReferences(ref, subject);
+						}
 					}
 					terminal = false;
 				}
@@ -245,7 +272,7 @@ public class HypNotiQMain extends JPanel {
 			e.printStackTrace();
 		}
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			SystemTray.getSystemTray().remove(theTrayIcon);
+			EventQueue.invokeLater(() -> SystemTray.getSystemTray().remove(theTrayIcon));
 		}, "HypNotiQ Shutdown"));
 
 		theNotes.getValues().onChange(evt -> {
@@ -288,19 +315,57 @@ public class HypNotiQMain extends JPanel {
 						right.getRightValue().getReferences().add(evt.getNewValue());
 					}).adjust();
 		});
+		theSnoozeAllItem = new MenuItem("Snooze All 5 min");
+		theSnoozeAllItem.addActionListener(evt -> {
+			theNotificationCallbackLock = true;
+			try {
+				Instant now = Instant.now();
+				for (ActiveNotification not : theActiveNotifications) {
+					if (not.getNextAlertTime() == null || not.getNextAlertTime().compareTo(now) >= 0) {
+						break;
+					}
+					not.getNotification().setSnoozeCount(not.getNotification().getSnoozeCount() + 1);
+					not.getNotification().setSnoozeTime(now.plus(Duration.ofMinutes(5)));
+					not.refresh();
+				}
+			} finally {
+				theNotificationCallbackLock = false;
+			}
+			processNotifications();
+		});
 
 		initComponents();
 
 		processNotifications();
 	}
 
+	/** @return All stored notes */
 	public SyncValueSet<Note> getNotes() {
 		return theNotes;
 	}
 
+	/** @return All stored subjects */
+	public SyncValueSet<Subject> getSubjects() {
+		return theSubjects;
+	}
+
+	/** @return All notifications for all notes, with an associated next alert time (if any) */
+	public ObservableCollection<ActiveNotification> getNotifications() {
+		return theNotifications;
+	}
+
+	/** @return All notifications for all notes that have a future alert time or have yet to be dismissed, sorted soonest to farthest */
+	public ObservableSortedCollection<ActiveNotification> getActiveNotifications() {
+		return theActiveNotifications;
+	}
+
+	/** @return The config for UI settings */
 	public ObservableConfig getConfig() {
 		return theConfig;
 	}
+
+	private Set<ActiveNotification> theCurrentNotifications = new HashSet<>();
+	private Instant theLastNotification;
 
 	private void processNotifications() {
 		if (theNotificationCallbackLock) {
@@ -310,16 +375,32 @@ public class HypNotiQMain extends JPanel {
 		try {
 			Instant now = Instant.now();
 			Instant nextAlert = null;
+			Iterator<ActiveNotification> cnIter = theCurrentNotifications.iterator();
+			while (cnIter.hasNext()) {
+				ActiveNotification cn = cnIter.next();
+				if (!cn.theElement.isPresent()) {
+					cnIter.remove();
+				} else if (cn.getNextAlertTime() == null || cn.getNextAlertTime().compareTo(now) > 0) {
+					theNotifications.mutableElement(cn.theElement).set(cn);
+					cnIter.remove();
+				}
+			}
+			boolean reAlert = !theCurrentNotifications.isEmpty() //
+					&& (theLastNotification == null || now.compareTo(theLastNotification.plus(theReNotifyDuration)) > 0);
+			Instant reNotify = theLastNotification == null ? now.plus(theReNotifyDuration) : theLastNotification.plus(theReNotifyDuration);
 			List<ActiveNotification> currentNotifications = new LinkedList<>();
 			for (CollectionElement<ActiveNotification> notification : theActiveNotifications.elements()) {
 				if (notification.get().getNextAlertTime().compareTo(now) > 0) {
 					nextAlert = notification.get().getNextAlertTime();
 					break;
 				}
-				if (currentNotifications.add(notification.get())) {
-					theActiveNotifications.mutableElement(notification.getElementId()).set(notification.get()); // Update
+				currentNotifications.add(notification.get());
+				if (theCurrentNotifications.add(notification.get())) {
+					reAlert = true;
+					theNotifications.mutableElement(notification.get().theElement).set(notification.get());
 				}
 			}
+
 			if (currentNotifications.isEmpty()) {//
 				if (nextAlert == null) {
 					theTrayIcon.setToolTip("HypNotiQ: No active reminders");
@@ -332,62 +413,68 @@ public class HypNotiQMain extends JPanel {
 			} else if (currentNotifications.size() == 1) {
 				ActiveNotification notification = currentNotifications.iterator().next();
 				theTrayIcon.setToolTip("HypNotiQ: 1 current reminder");
-				theTrayIcon.displayMessage(notification.getNotification().getNote().getName(), notification.getNotification().getName(),
-						MessageType.INFO);
-			} else {
-				StringBuilder msg = new StringBuilder();
-				int i = 0;
-				for (ActiveNotification not : currentNotifications) {
-					if (i > 0) {
-						msg.append('\n');
+				if (reAlert) {
+					String msg = notification.getNotification().getName();
+					if (notification.getNotification().getSnoozeCount() > 0) {
+						msg += " (Snoozed ";
+						switch (notification.getNotification().getSnoozeCount()) {
+						case 1:
+							msg += "Once";
+							break;
+						case 2:
+							msg += "Twice";
+							break;
+						default:
+							msg += notification.getNotification().getSnoozeCount() + " Times";
+							break;
+						}
+						msg += ")";
 					}
-					i++;
-					if (i < currentNotifications.size() && i == 3) {
-						msg.append("\nAnd ").append(currentNotifications.size() - i).append(" other notifications");
-					} else {
-						msg.append(not.getNotification().getName());
-					}
+					theLastNotification = now;
+					theTrayIcon.displayMessage(notification.getNotification().getNote().getName(), msg, MessageType.INFO);
 				}
+			} else {
 				theTrayIcon.setToolTip("HypNotiQ: " + currentNotifications.size() + " current reminders");
-				theTrayIcon.displayMessage(currentNotifications.size() + " Notifications", msg.toString(), MessageType.INFO);
+				if (reAlert) {
+					StringBuilder msg = new StringBuilder();
+					int i = 0;
+					for (ActiveNotification not : currentNotifications) {
+						if (i > 0) {
+							msg.append('\n');
+						}
+						i++;
+						if (i < currentNotifications.size() && i == 3) {
+							msg.append("\nAnd ").append(currentNotifications.size() - i).append(" other notifications");
+						} else {
+							msg.append(not.getNotification().getName());
+						}
+					}
+					theLastNotification = now;
+					theTrayIcon.displayMessage(currentNotifications.size() + " Notifications", msg.toString(), MessageType.INFO);
+				}
 			}
 
 			if (!currentNotifications.isEmpty()) {
-				if (nextAlert == null || nextAlert.compareTo(now.plus(theReNotifyDuration)) > 0) {
-					nextAlert = now.plus(theReNotifyDuration);
+				if (nextAlert == null || nextAlert.compareTo(reNotify) > 0) {
+					nextAlert=reNotify;
 				}
 				if (!hasSnoozeAll) {
-					MenuItem item = new MenuItem("Snooze All 5 min");
-					item.addActionListener(evt -> {
-						theNotificationCallbackLock = true;
-						try {
-							for (ActiveNotification not : currentNotifications) {
-								not.getNotification().setSnoozeCount(not.getNotification().getSnoozeCount() + 1);
-								not.getNotification().setSnoozeTime(now.plus(Duration.ofMinutes(5)));
-								not.refresh();
-							}
-						} finally {
-							theNotificationCallbackLock = false;
-						}
-						processNotifications();
-					});
-					thePopup.add(item);
+					thePopup.add(theSnoozeAllItem);
 					hasSnoozeAll = true;
 				}
 			} else if (hasSnoozeAll) {
-				for (int i = 0; i < thePopup.getItemCount(); i++) {
-					String name = thePopup.getItem(i).getLabel();
-					if (name.equals("Snooze All 5 min")) {
-						thePopup.remove(i);
-						break;
-					}
-				}
+				thePopup.remove(theSnoozeAllItem);
 				hasSnoozeAll = false;
 			}
 
 			if (nextAlert != null) {
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				System.out.println("Next alert at " + format.format(Date.from(nextAlert)) + " ("
+						+ QommonsUtils.printTimeLength(nextAlert.toEpochMilli() - System.currentTimeMillis())
+						+ ")");
 				theAlertTask.runNextAt(nextAlert);
 			} else {
+				System.out.println("No next alert");
 				theAlertTask.setActive(false);
 			}
 		} finally {
@@ -542,13 +629,7 @@ public class HypNotiQMain extends JPanel {
 								switch (answer) {
 								case JOptionPane.YES_OPTION:
 									for (Subject subject : subjects) {
-										for (Note ref : subject.getReferences()) {
-											if (ref.getReferences().size() == 1) {
-												theNotes.getValues().remove(ref);
-											} else {
-												scrubReferences(ref, subject);
-											}
-										}
+										theNotes.getValues().removeAll(subject.getReferences());
 									}
 									break;
 								case JOptionPane.NO_OPTION:
@@ -673,6 +754,7 @@ public class HypNotiQMain extends JPanel {
 										} finally {
 											theNotificationCallbackLock = true;
 										}
+										theNotifications.mutableElement(n.theElement).set(n);
 									}).asCheck()))//
 							.withColumn("Note", String.class, not -> not.getNotification().getNote().getName(),
 									col -> col.withWidths(100, 200, 500))//
@@ -696,86 +778,115 @@ public class HypNotiQMain extends JPanel {
 	private static void populateNotificationName(PanelPopulation.TableBuilder<ActiveNotification, ?> table, Container container,
 			boolean mutable) {
 		table//
-				.withNameColumn(n -> n.getNotification().getName(), (not, name) -> {
+				.withNameColumn(n -> n.getNotification().getName(), mutable ? (not, name) -> {
 					not.getNotification().setName(name);
 					not.getNotification().getNote().setModified(Instant.now());
-				}, false, col -> {
-					col.withWidths(100, 200, 500);
-					if (mutable) {
-						col.withMutation(mut -> mut.filterAccept((not, name) -> {
-							if (StringUtils.isUniqueName(not.get().getNotification().getNote().getNotifications().getValues(),
-									Notification::getName, name, not.get().getNotification())) {
-								return null;
-							}
-							return not.get().getNotification().getNote().getName() + " already has a notification named \"" + name + "\"";
-						}));
-					}
-				});
+				} : null, false, col -> col.withWidths(100, 200, 500));
 	}
 
 	private void populateNextAlertTime(PanelPopulation.TableBuilder<ActiveNotification, ?> table, Container container, boolean mutable) {
 		table.withColumn("Next Alert", Instant.class, ActiveNotification::getNextAlertTime,
-				col -> col.withWidths(100, 150, 300).withMutation(mut -> {
-					mut.mutateAttribute((not, time) -> {
-						theNotificationCallbackLock = true;
-						try {
-							if (!not.getNotification().isActive()) {
-								if (table.alert("Set Active", "This notification is not active.\nActivate it?").confirm(false)) {
-									not.getNotification().setActive(true);
-								}
-							}
-							if (not.getNotification().getEndTime() != null && time.compareTo(not.getNotification().getEndTime()) >= 0) {
-								if (table.alert("Clear End Time?",
-										"The given next alert time ("
-												+ QommonsUtils.printRelativeTime(time.toEpochMilli(), System.currentTimeMillis(),
-														QommonsUtils.TimePrecision.MINUTES, TimeZone.getDefault(), 0, null)
-												+ ") is greater than the current end time for the notification ("
-												+ QommonsUtils.printRelativeTime(not.getNotification().getEndTime().toEpochMilli(),
-														System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES,
-														TimeZone.getDefault(), 0, null)
-												+ ")."//
-												+ "\nDo you want to clear the end time for this notification?")
-										.confirm(false)) {
-									not.getNotification().setEndTime(null);
-								} else {
-									return;
-								}
-							}
-							not.getNotification().setInitialTime(time);
-							not.refresh();
-						} finally {
-							theNotificationCallbackLock = false;
+				col -> {
+					col.withWidths(100, 150, 300).decorate((cell, deco) -> {
+						Instant next = cell.getModelValue().getNextAlertTime();
+						if (next == null) {
+							return;
 						}
-					}).asText(FUTURE_DATE_FORMAT);
-				}).decorate((cell, deco) -> {
-					Instant next = cell.getModelValue().getNextAlertTime();
-					boolean notified = next != null && next.compareTo(Instant.now()) <= 0;
-					if (notified) {
-						deco.withBorder(BorderFactory.createLineBorder(Color.red));
+						Instant now = Instant.now();
+						boolean notified = false, today = false;
+						if (next.compareTo(now) <= 0) {
+							notified = true;
+						} else {
+							long day = next.getEpochSecond() / (24L * 60 * 60);
+							long nowDay = now.getEpochSecond() / (24L * 60 * 60);
+							today = day == nowDay;
+						}
+						if (notified) {
+							deco.withBorder(BorderFactory.createLineBorder(Color.red));
+						} else if (today) {
+							deco.withBorder(BorderFactory.createLineBorder(Color.blue));
+						}
+					});
+					if (mutable) {
+						col.withMutation(mut -> {
+							mut.mutateAttribute((not, time) -> {
+								theNotificationCallbackLock = true;
+								try {
+									if (!not.getNotification().isActive()) {
+										if (table.alert("Set Active", "This notification is not active.\nActivate it?").confirm(false)) {
+											not.getNotification().setActive(true);
+										}
+									}
+									if (not.getNotification().getEndTime() != null
+											&& time.compareTo(not.getNotification().getEndTime()) >= 0) {
+										if (table.alert("Clear End Time?",
+												"The given next alert time ("
+														+ QommonsUtils.printRelativeTime(time.toEpochMilli(), System.currentTimeMillis(),
+																QommonsUtils.TimePrecision.MINUTES, TimeZone.getDefault(), 0, null)
+														+ ") is greater than the current end time for the notification ("
+														+ QommonsUtils.printRelativeTime(not.getNotification().getEndTime().toEpochMilli(),
+																System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES,
+																TimeZone.getDefault(), 0, null)
+														+ ")."//
+														+ "\nDo you want to clear the end time for this notification?")
+												.confirm(false)) {
+											not.getNotification().setEndTime(null);
+										} else {
+											return;
+										}
+									}
+									not.getNotification().setSnoozeCount(0);
+									not.getNotification().setSnoozeTime(null);
+								} finally {
+									theNotificationCallbackLock = false;
+								}
+								not.getNotification().setInitialTime(time);
+							}).asText(FUTURE_DATE_FORMAT);
+						});
+					} else {
+						col.formatText(t -> t == null ? ""
+								: QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
+										QommonsUtils.TimePrecision.MINUTES, TimeZone.getDefault(), 0, null));
 					}
-				}));
+				});
 	}
 
 	private void populateRecurrence(PanelPopulation.TableBuilder<ActiveNotification, ?> table, Container container, boolean mutable) {
-		table.withColumn("Recurrence", ParsedDuration.class, n -> {
-			if (n.getNotification().getRecurInterval() == null) {
-				return null;
-			}
-			try {
-				return TimeUtils.parseDuration(n.getNotification().getRecurInterval());
-			} catch (ParseException e) {
-				e.printStackTrace();
-				return null;
-			}
-		}, col -> {
+		table.withColumn("Recurrence", String.class,
+				n -> n.getNotification().getRecurInterval() == null ? "" : n.getNotification().getRecurInterval(), col -> {
 			if (mutable) {
 				col.withMutation(mut -> mut.mutateAttribute((not, interval) -> {
-					not.getNotification().setRecurInterval(interval == null ? null : interval.toString());
+					not.getNotification().setRecurInterval(interval);
 					not.getNotification().getNote().setModified(Instant.now());
 					processNotifications();
-				}).asText(SpinnerFormat.forAdjustable(TimeUtils::parseDuration)).filterAccept((el, d) -> {
-					if (d != null && d.signum() <= 0) {
+				}).asText(SpinnerFormat.NUMERICAL_TEXT).filterAccept((el, recur) -> {
+					if (recur == null || recur.isEmpty()) {
+						return null;
+					}
+
+					char lastChar = recur.charAt(recur.length() - 1);
+					boolean monthly = false;
+					switch (lastChar) {
+					case '-':
+					case '#':
+						monthly = true;
+								recur = recur.substring(0, recur.length() - 1).trim();
+						break;
+					default:
+					}
+					ParsedDuration d;
+					try {
+						d = TimeUtils.parseDuration(recur);
+					} catch (ParseException e) {
+						return "Unrecognized duration: " + recur;
+					}
+					if (d.signum() <= 0) {
 						return "Recurrence must be positive";
+					}
+					if (monthly) {
+						if (d.getComponents().size() != 1 && d.getComponents().get(0).getField() != DurationComponentType.Month) {
+							return "'-' and '#' may only be used with monthly duration";
+						}
 					}
 					return null;
 				}));
@@ -832,13 +943,15 @@ public class HypNotiQMain extends JPanel {
 						} else if (action.equals("Skip Next")) {
 							theNotificationCallbackLock = true;
 							try {
-								Instant next, preNext;
+								Instant next, preNext, preLast;
+								preLast = not.getNotification().getLastAlertTime();
 								next = preNext = not.getNextAlertTime();
 								if (next == null) {
 									return;
 								}
 								Instant preOrig = not.getNotification().getInitialTime();
 								not.getNotification().setInitialTime(next);
+								not.getNotification().setLastAlertTime(next);
 								not.refresh();
 								next = not.getNextAlertTime();
 								if (next == null) { // ??
@@ -846,10 +959,15 @@ public class HypNotiQMain extends JPanel {
 									return;
 								}
 								next = not.getNextAlertTime();
+								not.getNotification().setLastAlertTime(preLast); // Restore
 								not.getNotification().setInitialTime(preOrig); // Restore
 								not.refresh();
 								if (next == null) {// ??
 									return;
+								}
+								CellEditor editor = table.getEditor().getCellEditor();
+								if (editor != null) {
+									editor.cancelCellEditing();
 								}
 								if (table
 										.alert("Skip Next Alert?", "Skip the next alert for " + not.getNotification().getName() + " at "
@@ -885,8 +1003,8 @@ public class HypNotiQMain extends JPanel {
 						}
 					}).asCombo(s -> s, (not, __) -> {
 						if (not.getModelValue().getNextAlertTime().compareTo(Instant.now()) <= 0) {
-							return ObservableCollection.of(String.class, "Snooze 5 min", "Snooze 30 min", "Snooze 1 hour", "Snooze...",
-									"Dismiss");
+							return ObservableCollection.of(String.class, "Dismiss", //
+									"Snooze 5 min", "Snooze 30 min", "Snooze 1 hour", "Snooze For...", "Snooze Until...");
 						} else if (not.getModelValue().getNotification().getSnoozeTime() != null
 								&& not.getModelValue().getNotification().getSnoozeTime().compareTo(Instant.now()) > 0) {
 							return ObservableCollection.of(String.class, "Dismiss");
@@ -898,223 +1016,6 @@ public class HypNotiQMain extends JPanel {
 						}
 					}).clicks(1);
 				}));
-	}
-
-	private void populateNotificationTable(PanelPopulation.TableBuilder<ActiveNotification, ?> table, Container container,
-			boolean mutable) {
-		table//
-				.withNameColumn(n -> n.getNotification().getName(), (not, name) -> {
-					not.getNotification().setName(name);
-					not.getNotification().getNote().setModified(Instant.now());
-				}, false, col -> {
-					col.withWidths(100, 200, 500);
-					if (mutable) {
-						col.withMutation(mut -> mut.filterAccept((not, name) -> {
-							if (StringUtils.isUniqueName(not.get().getNotification().getNote().getNotifications().getValues(),
-									Notification::getName, name, not.get().getNotification())) {
-								return null;
-							}
-							return not.get().getNotification().getNote().getName() + " already has a notification named \"" + name + "\"";
-						}));
-					}
-				})//
-				.withColumn("Next Alert", Instant.class, ActiveNotification::getNextAlertTime,
-						col -> col.withWidths(100, 150, 300).withMutation(mut -> {
-							mut.mutateAttribute((not, time) -> {
-								theNotificationCallbackLock = true;
-								try {
-									if (!not.getNotification().isActive()) {
-										if (table.alert("Set Active", "This notification is not active.\nActivate it?").confirm(false)) {
-											not.getNotification().setActive(true);
-										}
-									}
-									if (not.getNotification().getEndTime() != null
-											&& time.compareTo(not.getNotification().getEndTime()) >= 0) {
-										if (table.alert("Clear End Time?",
-												"The given next alert time ("
-														+ QommonsUtils.printRelativeTime(time.toEpochMilli(), System.currentTimeMillis(),
-																QommonsUtils.TimePrecision.MINUTES, TimeZone.getDefault(), 0, null)
-														+ ") is greater than the current end time for the notification ("
-														+ QommonsUtils.printRelativeTime(not.getNotification().getEndTime().toEpochMilli(),
-																System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES,
-																TimeZone.getDefault(), 0, null)
-														+ ")."//
-														+ "\nDo you want to clear the end time for this notification?")
-												.confirm(false)) {
-											not.getNotification().setEndTime(null);
-										} else {
-											return;
-										}
-									}
-									not.getNotification().setInitialTime(time);
-									not.refresh();
-								} finally {
-									theNotificationCallbackLock = false;
-								}
-							}).asText(FUTURE_DATE_FORMAT);
-						}).decorate((cell, deco) -> {
-							Instant next=cell.getModelValue().getNextAlertTime();
-							boolean notified = next!=null && next.compareTo(Instant.now()) <= 0;
-							if (notified) {
-								deco.withBorder(BorderFactory.createLineBorder(Color.red));
-							}
-						}))//
-				.withColumn("Recurrence", ParsedDuration.class, n -> {
-					if (n.getNotification().getRecurInterval() == null) {
-						return null;
-					}
-					try {
-						return TimeUtils.parseDuration(n.getNotification().getRecurInterval());
-					} catch (ParseException e) {
-						e.printStackTrace();
-						return null;
-					}
-				}, col -> {
-					if (mutable) {
-						col.withMutation(mut -> mut.mutateAttribute((not, interval) -> {
-							not.getNotification().setRecurInterval(interval == null ? null : interval.toString());
-							not.getNotification().getNote().setModified(Instant.now());
-							processNotifications();
-						}).asText(SpinnerFormat.forAdjustable(TimeUtils::parseDuration)).filterAccept((el, d) -> {
-							if (d != null && d.signum() <= 0) {
-								return "Recurrence must be positive";
-							}
-							return null;
-						}));
-					}
-				})//
-				.withColumn("End", Instant.class, n -> n.getNotification().getEndTime(),
-						col -> {
-							col.withWidths(100, 150, 300);
-							if (mutable) {
-								col.withMutation(mut -> mut.mutateAttribute((not, end) -> {
-									not.getNotification().setEndTime(end);
-									not.getNotification().getNote().setModified(Instant.now());
-								}).asText(FUTURE_DATE_FORMAT));
-							} else {
-								col.formatText(t -> t == null ? ""
-										: QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
-												QommonsUtils.TimePrecision.SECONDS, TimeZone.getDefault(), 0, null));
-							}
-						})//
-				.withColumn("Snoozed", Integer.class, n -> n.getNotification().getSnoozeCount(), col -> col.formatText(s -> {
-					switch (s) {
-					case 0:
-						return "";
-					case 1:
-						return "Once";
-					case 2:
-						return "Twice";
-					default:
-						return s + " times";
-					}
-				}))//
-				.withColumn("Last Alert", Instant.class, n -> n.getNotification().getLastAlertTime(),
-						col -> col.withWidths(100, 150, 300)
-								.formatText(t -> t == null ? "Never"
-										: QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
-												QommonsUtils.TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)))//
-				.withColumn("Action", String.class, n -> "", col -> col.withMutation(mut -> {
-					mut.mutateAttribute((not, action) -> {
-						Instant now = Instant.now();
-						if (action.startsWith("Snooze")) {
-							String durationStr = action.substring("Snooze".length()).trim();
-							Duration duration;
-							if (durationStr.equals("...")) {
-								SettableValue<Duration> durationValue = SettableValue.build(Duration.class).safe(false).build();
-								SimpleObservable<Void> temp = SimpleObservable.build().safe(false).build();
-								ObservableTextField<Duration> durationField = new ObservableTextField<>(durationValue,
-										SpinnerFormat.flexDuration(false), temp);
-								durationStr = JOptionPane.showInputDialog(container, durationField, "Select Snooze Time",
-										JOptionPane.QUESTION_MESSAGE);
-								if (durationStr == null || durationStr.isEmpty()) {
-									return;
-								}
-								duration = durationValue.get();
-								temp.onNext(null);
-							} else {
-								try {
-									duration = QommonsUtils.parseDuration(durationStr);
-								} catch (ParseException e) {
-									e.printStackTrace();
-									return;
-								}
-							}
-							not.getNotification().setSnoozeCount(not.getNotification().getSnoozeCount() + 1);
-							not.getNotification().setSnoozeTime(now.plus(duration));
-						} else if (action.equals("Dismiss")) {
-							not.getNotification().setSnoozeTime(null);
-							not.getNotification().setSnoozeCount(0);
-							not.getNotification().setLastAlertTime(now);
-						} else if (action.equals("Skip Next")) {
-							theNotificationCallbackLock = true;
-							try {
-								Instant next, preNext;
-								next = preNext = not.getNextAlertTime();
-								if (next == null) {
-									return;
-								}
-								Instant preOrig = not.getNotification().getInitialTime();
-								not.getNotification().setInitialTime(next);
-								not.refresh();
-								next = not.getNextAlertTime();
-								if (next == null) { // ??
-									not.getNotification().setInitialTime(preOrig);
-									return;
-								}
-								next = not.getNextAlertTime();
-								not.getNotification().setInitialTime(preOrig); // Restore
-								not.refresh();
-								if (next == null) {// ??
-									return;
-								}
-								if (table.alert("Skip Next Alert?", "Skip the next alert for " + not.getNotification().getName() + " at "
-										+ QommonsUtils.printRelativeTime(preNext.toEpochMilli(), now.toEpochMilli(),
-												TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)
-										+ " (" + QommonsUtils.printDuration(TimeUtils.between(now, preNext), false)
-										+ " from now)?\n"//
-										+ "The next alert would then be at "
-										+ QommonsUtils.printRelativeTime(next.toEpochMilli(), now.toEpochMilli(),
-												TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)
-										+ " (" + QommonsUtils.printDuration(TimeUtils.between(now, next), false)
-										+ " from now).").confirm(true)) {
-									not.getNotification().setInitialTime(next);
-									not.refresh();
-								} else {
-									return;
-								}
-							} finally {
-								theNotificationCallbackLock = false;
-							}
-						}
-						not.refresh();
-						theNotifications.mutableElement(not.theElement).set(not);
-						processNotifications();
-					}).editableIf((not, __) -> {
-						if (not.getNextAlertTime() == null) {
-							return false;
-						} else if (not.getNextAlertTime().compareTo(Instant.now()) > 0
-								&& not.getNotification().getRecurInterval() == null) {
-							return false;
-						} else {
-							return true;
-						}
-					}).asCombo(s -> s, (not, __) -> {
-						if (not.getModelValue().getNextAlertTime().compareTo(Instant.now()) <= 0) {
-							return ObservableCollection.of(String.class, "Snooze 5 min", "Snooze 30 min", "Snooze 1 hour", "Snooze...",
-									"Dismiss");
-						} else if (not.getModelValue().getNotification().getSnoozeTime() != null
-								&& not.getModelValue().getNotification().getSnoozeTime().compareTo(Instant.now()) > 0) {
-							return ObservableCollection.of(String.class, "Dismiss");
-						} else if (not.getModelValue().getNextAlertTime() != null
-								&& not.getModelValue().getNotification().getRecurInterval() != null) {
-							return ObservableCollection.of(String.class, "Skip Next");
-						} else {
-							return ObservableCollection.of(String.class);
-						}
-					}).clicks(1);
-				}))//
-		;
 	}
 
 	private void populateSubjectEditor(PanelPopulator<?, ?> panel, Subject value) {
@@ -1133,18 +1034,12 @@ public class HypNotiQMain extends JPanel {
 						tf -> tf.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP)
 								.modifyEditor(tf2 -> tf2.setEmptyText("Search...").setCommitOnType(true)))//
 				.addTable(references, table -> {
+					// Notes not editable here--double click to open them
 					table.fill().fillV()//
 							.withFiltering(filter)//
 							.withItemName("Notes")//
-							.withNameColumn(Note::getName, null/*(note, name) -> { //Notes not editable here
-																note.setName(name);
-																note.setModified(Instant.now());
-																}*/, false, col -> col.withWidths(50, 120, 300))//
-							.withColumn("Occurred", Instant.class, Note::getOccurred,
-									col -> col/*.withMutation(mut -> mut.mutateAttribute((note, occurred) -> {
-												note.setOccurred(occurred);
-												note.setModified(Instant.now());
-												}).asText(DATE_FORMAT))*/.withWidths(100, 150, 300))//
+							.withNameColumn(Note::getName, null, false, col -> col.withWidths(50, 120, 300))//
+							.withColumn("Occurred", Instant.class, Note::getOccurred, col -> col.withWidths(100, 150, 300))//
 							.withColumn("Content", String.class, Note::getContent, col -> col.withWidths(50, 400, 2000))//
 							.withMouseListener(new ObservableTableModel.RowMouseAdapter<Note>() {
 								@Override
@@ -1188,18 +1083,46 @@ public class HypNotiQMain extends JPanel {
 				.addTextField("Occurred", EntityReflector.observeField(value, Note::getOccurred), PAST_DATE_FORMAT, tf -> tf.fill())//
 				.addComboField("Status", EntityReflector.observeField(value, Note::getStatus), null, NoteStatus.values())//
 				.addTextArea(null, EntityReflector.observeField(value, Note::getContent), Format.TEXT,
-						tf -> tf.fill().fillV().modifyEditor(ta -> ta.withRows(8)))//
+						tf -> tf.fill().fillV().modifyEditor(ta -> ta.withRows(8).setSelectAllOnFocus(false)))//
 				.addTable(activeNots, notifications -> {
 					notifications.fill().withItemName("Notification")//
 							.withColumn("Active", boolean.class, n -> n.getNotification().isActive(),
 									col -> col.withWidths(10, 40, 50).withMutation(mut -> mut.mutateAttribute((n, a) -> {
-										theNotificationCallbackLock = true;
-										try {
-											n.getNotification().setActive(a);
-											n.refresh();
-										} finally {
-											theNotificationCallbackLock = true;
+										if (a) {
+											Instant now = Instant.now();
+											if (n.getNotification().getRecurInterval() == null
+													&& n.getNotification().getInitialTime().compareTo(now) < 0) {
+												if (notifications
+														.alert("Reset Start Time?",
+																"The notification's start time time (" + QommonsUtils.printRelativeTime(
+																		n.getNotification().getInitialTime().toEpochMilli(),
+																		System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES,
+																		TimeZone.getDefault(), 0, null) + ") has passed."//
+																		+ "\nDo you want to reset the start time for this notification?")
+														.confirm(false)) {
+													// Get "now" again because it may have been a while
+													n.getNotification().setInitialTime(Instant.now().plus(Duration.ofMinutes(5)));
+												} else {
+													return;
+												}
+											}
+											if (n.getNotification().getEndTime() != null
+													&& now.compareTo(n.getNotification().getEndTime()) >= 0) {
+												if (notifications
+														.alert("Clear End Time?",
+																"The notification's end time time (" + QommonsUtils.printRelativeTime(
+																		n.getNotification().getEndTime().toEpochMilli(),
+																		System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES,
+																		TimeZone.getDefault(), 0, null) + ") has passed."//
+																		+ "\nDo you want to clear the end time for this notification?")
+														.confirm(false)) {
+													n.getNotification().setEndTime(null);
+												} else {
+													return;
+												}
+											}
 										}
+										n.getNotification().setActive(a);
 									}).asCheck()));
 					populateNotificationName(notifications, panel.getContainer(), true);
 					populateNextAlertTime(notifications, panel.getContainer(), true);
@@ -1224,7 +1147,7 @@ public class HypNotiQMain extends JPanel {
 								time.add(Calendar.MINUTE, 5);
 								Notification newNot = value.getNotifications().create()//
 										.with(Notification::getName,
-												StringUtils.getNewItemName(theSelectedNote.get().getNotifications().getValues(),
+												StringUtils.getNewItemName(value.getNotifications().getValues(),
 														Notification::getName, "Reminder", StringUtils.SIMPLE_DUPLICATES))//
 										.with(Notification::getInitialTime, Instant.ofEpochMilli(time.getTimeInMillis()))//
 										.with(Notification::isActive, true)//
@@ -1258,9 +1181,16 @@ public class HypNotiQMain extends JPanel {
 	}
 
 	private static void scrubReferences(Note note, Subject reference) {
-		int todo = todo;// TODO
+		note.getReferences().remove(reference);
+		// TODO Modify the note's content to remove coded reference, replacing with "@Subject" text
 	}
 
+	/**
+	 * Main method for HypNotiQ
+	 * 
+	 * @param args
+	 *            Command-line arguments, ignored
+	 */
 	public static void main(String[] args) {
 		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
 				.disposeOnClose(false)//
@@ -1344,20 +1274,23 @@ public class HypNotiQMain extends JPanel {
 		}).withBuiltNotifier(built).buildEntitySet(notes);
 	}
 
+	/** Tracks the next (or current) alert time for each notification */
 	public static class ActiveNotification implements Comparable<ActiveNotification> {
 		private final Notification theNotification;
 		ElementId theElement;
 		private Instant theNextAlertTime;
 
-		public ActiveNotification(Notification notification) {
+		ActiveNotification(Notification notification) {
 			theNotification = notification;
 			theNextAlertTime = getNextAlertTime(notification);
 		}
 
+		/** @return The notification backing this object */
 		public Notification getNotification() {
 			return theNotification;
 		}
 
+		/** @return The next (or current) alert time for this notification, or null if no further notifications are scheduled */
 		public Instant getNextAlertTime() {
 			return theNextAlertTime;
 		}
@@ -1385,9 +1318,36 @@ public class HypNotiQMain extends JPanel {
 				return start;
 			}
 			String recur = notification.getRecurInterval();
-			if (recur == null) {
-				return null;
+			if (recur == null || recur.isEmpty()) {
+				if (start.compareTo(lastAlert) > 0) {
+					return start;
+				} else {
+					return null;
+				}
 			}
+			char lastChar = recur.charAt(recur.length() - 1);
+			int day, number;
+			switch (lastChar) {
+			case '-': // Code for days from the last of the month
+				recur = recur.substring(0, recur.length() - 1);
+				Calendar cal = TimeUtils.CALENDAR.get();
+				cal.setTimeZone(TimeZone.getDefault());
+				cal.setTimeInMillis(start.toEpochMilli());
+				day = cal.getActualMaximum(Calendar.DAY_OF_MONTH) - cal.get(Calendar.DAY_OF_MONTH);
+				number = -1;
+				break;
+			case '#': // Code for Xth [weekday] of the month
+				recur = recur.substring(0, recur.length() - 1);
+				cal = TimeUtils.CALENDAR.get();
+				cal.setTimeZone(TimeZone.getDefault());
+				cal.setTimeInMillis(start.toEpochMilli());
+				day = cal.get(Calendar.DAY_OF_WEEK);
+				number = cal.get(Calendar.WEEK_OF_MONTH) - 1;
+				break;
+			default: // Normal frequency
+				day = number = -1;
+			}
+
 			ParsedDuration duration;
 			try {
 				duration = TimeUtils.parseDuration(recur);
@@ -1396,28 +1356,47 @@ public class HypNotiQMain extends JPanel {
 				return null;
 			}
 			Instant nextAlert;
-			if (lastAlert.equals(start)) {
-				nextAlert = duration.addTo(start, TimeZone.getDefault());
+			if (lastAlert.compareTo(start) < 0) {
+				nextAlert = start;
 			} else {
 				Duration estDuration = duration.asDuration();
 				int times = TimeUtils.divide(Duration.between(start, lastAlert), estDuration);
-				if (times == 0) {
-					nextAlert = duration.addTo(start, TimeZone.getDefault());
+				if (times <= 0) {
+					nextAlert = nextAlert(start, duration, day, number);
 				} else {
-					if (times <= 2) {
-						nextAlert = duration.addTo(start, TimeZone.getDefault());
+					if (times > 1) {
+						nextAlert = duration.times(times - 2).addTo(start, TimeZone.getDefault());
 					} else {
-						nextAlert = duration.times(times - 1).addTo(start, TimeZone.getDefault());
+						nextAlert = start;
 					}
-					while (nextAlert.compareTo(lastAlert) < 0) {
-						nextAlert = duration.addTo(nextAlert, TimeZone.getDefault());
-					}
+					do {
+						nextAlert = nextAlert(nextAlert, duration, day, number);
+					} while (nextAlert.compareTo(lastAlert) < 0);
 				}
 			}
 			if (notification.getEndTime() != null && nextAlert.compareTo(notification.getEndTime()) > 0) {
 				nextAlert = null;
 			}
 			return nextAlert;
+		}
+
+		private static Instant nextAlert(Instant start, ParsedDuration duration, int day, int number) {
+			if (number >= 0) { // Xth [weekday] of the month
+				Calendar cal = TimeUtils.CALENDAR.get();
+				cal.setTimeInMillis(start.toEpochMilli());
+				cal.set(Calendar.DAY_OF_MONTH, 1);
+				cal.add(Calendar.MONTH, 1);
+				cal.set(Calendar.DAY_OF_WEEK, day); // TODO Moves forward, right?
+				cal.add(Calendar.DAY_OF_MONTH, number * 7);
+				return Instant.ofEpochMilli(cal.getTimeInMillis());
+			} else if (day >= 0) {// X days before the end of the month
+				Calendar cal = TimeUtils.CALENDAR.get();
+				cal.setTimeInMillis(start.toEpochMilli());
+				cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH) - day);
+				return Instant.ofEpochMilli(cal.getTimeInMillis());
+			} else {
+				return duration.addTo(start, TimeZone.getDefault());
+			}
 		}
 
 		@Override
