@@ -1147,8 +1147,8 @@ public class HypNotiQMain extends JPanel {
 								time.add(Calendar.MINUTE, 5);
 								Notification newNot = value.getNotifications().create()//
 										.with(Notification::getName,
-												StringUtils.getNewItemName(value.getNotifications().getValues(),
-														Notification::getName, "Reminder", StringUtils.SIMPLE_DUPLICATES))//
+												StringUtils.getNewItemName(value.getNotifications().getValues(), Notification::getName,
+														"Reminder", StringUtils.SIMPLE_DUPLICATES))//
 										.with(Notification::getInitialTime, Instant.ofEpochMilli(time.getTimeInMillis()))//
 										.with(Notification::isActive, true)//
 										.create().get();
@@ -1156,7 +1156,7 @@ public class HypNotiQMain extends JPanel {
 									if (an.getNotification() == newNot) {
 										return an;
 									}
-							}
+								}
 								throw new IllegalStateException("No active notification added");
 							}, null)//
 							.withRemove(nots -> value.getNotifications().getValues()
