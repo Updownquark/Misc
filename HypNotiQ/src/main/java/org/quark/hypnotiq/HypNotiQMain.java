@@ -797,8 +797,9 @@ public class HypNotiQMain extends JPanel {
 						if (next.compareTo(now) <= 0) {
 							notified = true;
 						} else {
-							long day = next.getEpochSecond() / (24L * 60 * 60);
-							long nowDay = now.getEpochSecond() / (24L * 60 * 60);
+							long offset = TimeZone.getDefault().getOffset(now.toEpochMilli()) / 1000;
+							long day = (next.getEpochSecond() + offset) / (24L * 60 * 60);
+							long nowDay = (now.getEpochSecond() + offset) / (24L * 60 * 60);
 							today = day == nowDay;
 						}
 						if (notified) {
