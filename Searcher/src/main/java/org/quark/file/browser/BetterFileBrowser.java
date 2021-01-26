@@ -1,14 +1,19 @@
 package org.quark.file.browser;
 
+import java.awt.Cursor;
+import java.awt.EventQueue;
 import java.awt.event.MouseEvent;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.TimeZone;
+import java.util.function.Consumer;
 
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 import org.observe.ObservableValue;
+import org.observe.ObservableValueEvent;
 import org.observe.SettableValue;
+import org.observe.collect.DataControlledCollection;
 import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedCollection;
 import org.observe.file.ObservableFile;
@@ -18,12 +23,14 @@ import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
 import org.observe.util.swing.WindowPopulation;
+import org.qommons.LambdaUtils;
 import org.qommons.io.ArchiveEnabledFileSource;
 import org.qommons.io.BetterFile;
 import org.qommons.io.BetterFile.FileDataSource;
 import org.qommons.io.Format;
 import org.qommons.io.NativeFileSource;
 import org.qommons.io.SpinnerFormat;
+import org.qommons.threading.QommonsTimer;
 
 public class BetterFileBrowser extends JPanel {
 	public static final Format<Double> SIZE_FORMAT = Format.doubleFormat(3)//
@@ -36,23 +43,20 @@ public class BetterFileBrowser extends JPanel {
 	private final ObservableFile theWorkingDir;
 
 	private final SettableValue<ObservableFile> theFile;
-	private final SettableValue<Boolean> isRefreshing;
-	private final ObservableSortedCollection<ObservableFile> theRoots;
-	private final ObservableSortedCollection<ObservableFile> theChildren;
-	private final SettableValue<Boolean> isCurrentlyRefreshing;
-	private int theAncestorIndex;
-	private boolean isNavToParent;
-	private boolean isNavToChild;
+	private final ObservableValue<Boolean> isRefreshing;
+	private final DataControlledCollection<ObservableFile, ?> theRoots;
+	private final ObservableValue<DataControlledCollection<? extends ObservableFile, ?>> theCurrentContent;
+	private final ObservableSortedCollection<ObservableFile> theContent;
 
 	public BetterFileBrowser(FileDataSource dataSource, ObservableFile workingDir) {
 		theDataSource = dataSource;
 		theWorkingDir = workingDir;
-		theFile = SettableValue.build(ObservableFile.class).safe(false).withValue(ObservableFile.observe(theWorkingDir)).build();
-		theRoots = ObservableFile.getRoots(dataSource).flow().sorted(BetterFile.DISTINCT_NUMBER_TOLERANT).collect();
-		theChildren = ObservableCollection.flattenValue(theFile.map(f -> f == null ? theRoots : f.listFiles())).flow()
+		theFile = SettableValue.build(ObservableFile.class).withValue(ObservableFile.observe(theWorkingDir)).build();
+		theRoots = ObservableFile.getRoots(dataSource);
+		theCurrentContent = theFile.map(f -> f == null ? theRoots : f.listFiles());
+		theContent = ObservableCollection.flattenValue(theCurrentContent).flow()
 				.sorted(BetterFile.DISTINCT_NUMBER_TOLERANT).collect();
-		isRefreshing = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-		isCurrentlyRefreshing = SettableValue.build(boolean.class).safe(false).withValue(false).build();
+		isRefreshing = ObservableValue.flatten(theCurrentContent.<ObservableValue<Boolean>> map(c -> c.isRefreshing()));
 
 		ObservableSwingUtils.onEQ(this::initComponents);
 	}
@@ -64,29 +68,22 @@ public class BetterFileBrowser extends JPanel {
 	private void initComponents() {
 		// Table, up, file path
 		SettableValue<ObservableFile> selectedFile = SettableValue.build(ObservableFile.class).safe(false).build();
-		ObservableValue<String> refreshing = isCurrentlyRefreshing.map(r -> r ? "Refreshing" : null);
 		PanelPopulation.populateVPanel(this, null)//
 				.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), p -> {
 					p.fill().addTextField(null, theFile, new ObservableFile.FileFormat(theDataSource, theWorkingDir, true),
 							tf -> tf.fill().modifyEditor(tf2 -> tf2.setReformatOnCommit(true)))//
 							.addButton("..", this::navigateUp,
-									btn -> btn.disableWith(theFile.map(f -> f == null ? "No parent" : null)).disableWith(refreshing))
-							.addCheckField("Refresh:", isRefreshing.disableWith(refreshing), null)//
+									btn -> btn.disableWith(theFile.map(f -> f == null ? "No parent" : null)))
 					;
 				}).addSplit(true, split -> split.fill().fillV().withSplitProportion(0.5)//
-						.firstV(splitTop -> splitTop.fill().fillV().addTable(theChildren, table -> {
+						.firstV(splitTop -> splitTop.fill().fillV().addTable(theContent, table -> {
 							table.fill().fillV().withNameColumn(BetterFile::getName, null, true, col -> col.withWidths(50, 200, 10000)
 									.withMouseListener(new CategoryRenderStrategy.CategoryMouseAdapter<ObservableFile, String>() {
 										@Override
 										public void mouseClicked(ModelCell<? extends ObservableFile, ? extends String> cell, MouseEvent e) {
-											if (isCurrentlyRefreshing.get() || !SwingUtilities.isLeftMouseButton(e)
-													|| e.getClickCount() != 2) {
-												return;
-											}
-											if (cell.getModelValue().isDirectory()) {
-												isNavToChild = true;
+											if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2
+													&& cell.getModelValue().isDirectory()) {
 												theFile.set(cell.getModelValue(), e);
-												isNavToChild = false;
 											}
 										}
 									}))//
@@ -94,13 +91,37 @@ public class BetterFileBrowser extends JPanel {
 										long lastMod = f.getLastModified();
 										return lastMod == 0 ? Instant.ofEpochMilli(lastMod) : null;
 									}, col -> col.withWidths(50, 130, 200).withMutation(
-											m -> m.asText(SpinnerFormat.flexDate(Instant::now, "EEE d MMM yyyy", TimeZone.getDefault()))))//
+											m -> m.asText(SpinnerFormat.flexDate(Instant::now, "EEE d MMM yyyy", null))))//
 									.withColumn("Size", long.class, BetterFile::length,
 											col -> col.withWidths(20, 50, 100)
 													.formatText(sz -> sz < 0 ? "?" : SIZE_FORMAT.format(sz * 1.0)))//
 									.withSelection(selectedFile, false);
 						})).lastV(splitBottom -> splitBottom.fill().fillV().addComponent(null, new FileContentViewer(selectedFile),
 								f -> f.fill().fillV())));
+		isRefreshing.changes().act(new Consumer<ObservableValueEvent<Boolean>>() {
+			// We don't want to flash the wait cursor every second for trivial refreshes,
+			// but if refresh takes a while, tell the user about it
+			private volatile boolean isRefreshingNow;
+
+			@Override
+			public void accept(ObservableValueEvent<Boolean> evt) {
+				isRefreshingNow = evt.getNewValue();
+				if (isRefreshingNow) {
+					QommonsTimer.getCommonInstance()
+							.build(LambdaUtils.printableRunnable(this::checkCursor, "checkCursor", null), null, false)
+							.runNextIn(Duration.ofMillis(100));
+				} else {
+					setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+				}
+			}
+
+			private void checkCursor() {
+				if (isRefreshingNow) {
+					EventQueue.invokeLater(
+							() -> setCursor(Cursor.getPredefinedCursor(isRefreshingNow ? Cursor.WAIT_CURSOR : Cursor.DEFAULT_CURSOR)));
+				}
+			}
+		});
 	}
 
 	void navigateUp(Object cause) {
@@ -108,9 +129,7 @@ public class BetterFileBrowser extends JPanel {
 		if (file == null) {
 			return;
 		}
-		isNavToParent = true;
 		theFile.set(file.getParent(), cause);
-		isNavToParent = false;
 	}
 
 	public static void main(String[] args) {

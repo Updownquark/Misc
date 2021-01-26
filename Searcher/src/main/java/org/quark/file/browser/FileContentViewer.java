@@ -1,8 +1,12 @@
 package org.quark.file.browser;
 
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.geom.Rectangle2D;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -38,9 +42,10 @@ public class FileContentViewer extends JPanel {
 	private final SettableValue<Boolean> canScrollBack;
 	private final SettableValue<Boolean> canScrollForward;
 	private final SettableValue<String> theViewMode;
-	private final SettableValue<Boolean> theTextWrap;
 	private final SettableValue<String> theViewText;
 	private final SettableValue<Boolean> isReading;
+	private final SettableValue<String> theSearch;
+	private final SettableValue<String> isSearching;
 
 	private long theFileModTime;
 
@@ -59,11 +64,12 @@ public class FileContentViewer extends JPanel {
 		canScrollBack = SettableValue.build(boolean.class).safe(false).withValue(false).build();
 		canScrollForward = SettableValue.build(boolean.class).safe(false).withValue(true).build();
 		theViewMode = SettableValue.build(String.class).safe(false).withValue("Binary").build();
-		theTextWrap = SettableValue.build(boolean.class).safe(false).withValue(false).build();
 		theViewText = SettableValue.build(String.class).safe(false).withValue("Binary").build();
 		isReading = SettableValue.build(boolean.class).safe(false).withValue(false).build();
 		theTextBuffer = new StringBuilder();
 		theScrollPositions = new LinkedList<>();
+		isSearching = SettableValue.build(String.class).safe(false).withValue(null).build();
+		theSearch = SettableValue.build(String.class).safe(false).withValue("").build().disableWith(isSearching);
 
 		ObservableValue<String> reading = isReading.map(r -> r ? "Reading Data" : null);
 		PanelPopulation.populateVPanel(this, null)//
@@ -76,10 +82,10 @@ public class FileContentViewer extends JPanel {
 							.addLabel(null, theFileSize.map(sz -> sz < 0 ? Double.NaN : sz * 1.0), BetterFileBrowser.SIZE_FORMAT, null)//
 							.addButton(">>", this::scrollRight,
 									btn -> btn.disableWith(canScrollForward.map(sf -> sf ? null : "At end")).disableWith(reading))//
-							.addComboField(null, theViewMode.disableWith(reading), Arrays.asList("Binary", "UTF-8", "UTF-16"), null)//
-							.addCheckField("Wrap:",
-									theTextWrap.disableWith(theViewMode.map(vm -> vm.equals("Binary") ? vm : null)).disableWith(reading),
-									null)//
+							.addComboField(null, theViewMode.disableWith(reading),
+									Arrays.asList("Binary", "UTF-8", "UTF-16", "Binary/UTF-8"), null)//
+							.addTextField(null, theSearch.disableWith(reading), Format.TEXT, f -> f.modifyEditor(tf -> tf.withColumns(10)))//
+							.addLabel(null, isSearching.map(s -> s == null ? "" : s), Format.TEXT, null)//
 					;
 				})//
 				.addTextArea(null, theViewText, Format.TEXT, ta -> ta.fill().fillV().modifyEditor(c -> {
@@ -127,19 +133,47 @@ public class FileContentViewer extends JPanel {
 				changing[0] = false;
 			}
 		});
-		Observable.or(theStart.noInitChanges(), theViewMode.noInitChanges(), theTextWrap.noInitChanges()).act(evt -> {
+		Observable.or(theStart.noInitChanges(), theViewMode.noInitChanges()).act(evt -> {
 			if (changing[0]) {
 				return;
 			}
 			if (!isControlledSeek) {
 				theScrollPositions.clear();
 			}
+			theViewText.set("", evt);
 			canScrollBack.set(!theScrollPositions.isEmpty(), evt);
 			theEnd.set(theStart.get(), evt);
 			isReading.set(true, evt);
 			QommonsTimer.getCommonInstance().offload(this::readData);
 		});
 		QommonsTimer.getCommonInstance().offload(this::readData);
+		theSearch.noInitChanges().act(evt -> {
+			isSearching.set("Searching...", evt);
+			QommonsTimer.getCommonInstance().offload(() -> {
+				if (evt.getNewValue().length() > 0) {
+					try {
+						long[] found = searchFor(evt.getNewValue());
+						EventQueue.invokeLater(() -> {
+							if (found != null) {
+								theStart.set(found[0], null);
+								JOptionPane.showMessageDialog(this, "\"" + evt.getNewValue() + "\" found at position " + found[1],
+										"Text found", JOptionPane.INFORMATION_MESSAGE);
+							} else {
+								JOptionPane.showMessageDialog(this, "\"" + evt.getNewValue() + "\" not found", "Text not found",
+										JOptionPane.INFORMATION_MESSAGE);
+							}
+						});
+					} catch (IOException e) {
+						e.printStackTrace();
+						ObservableSwingUtils.onEQ(() -> {
+							JOptionPane.showMessageDialog(this, "Could not read file " + theFile.get(), "File Read Failure",
+									JOptionPane.ERROR_MESSAGE);
+						});
+					}
+				}
+				isSearching.set(null, null);
+			});
+		});
 	}
 
 	void scrollLeft(Object cause) {
@@ -178,7 +212,6 @@ public class FileContentViewer extends JPanel {
 		}
 		long start = theStart.get();
 		String viewMode = theViewMode.get();
-		boolean wrap = theTextWrap.get();
 		theTextBuffer.setLength(0);
 		int width = theTextComponent.getWidth();
 		int height = theTextComponent.getHeight();
@@ -197,24 +230,75 @@ public class FileContentViewer extends JPanel {
 		BooleanSupplier canceled = () -> false;
 		try (InputStream in = file.read(start, canceled)) {
 			int read;
-			if (viewMode.equals("Binary")) {
+			if (viewMode.startsWith("Binary")) {
 				long end = start;
+				boolean withText = viewMode.endsWith("UTF-8");
 				StringUtils.CharAccumulator chars = new StringUtils.AppendableWriter<>(line);
 				int byteCount;
+				ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+				line.append(start).append(": ");
 				for (read = in.read(), byteCount = 0; read >= 0; read = in.read(), byteCount++) {
 					if (byteCount > 0 && byteCount % 4 == 0) {
 						if (line.length() + 9 > maxLineLength) {
 							lineCount++;
-							if (lineCount == maxLines) {
+							if (lineCount >= maxLines - 1) {
 								break;
 							}
 							lastLineStart = end;
 							addLine(line, end, false);
+							int spaces = line.indexOf(": ") + 2;
 							line.setLength(0);
+							if (withText) {
+								for (int i = 0; i < spaces; i++) {
+									line.append(' ');
+								}
+								CountingInputStream counting = new CountingInputStream(new ByteArrayInputStream(buffer.toByteArray()));
+								@SuppressWarnings("resource")
+								Reader reader = new InputStreamReader(counting, Charset.forName("UTF-8"));
+								int c = 0;
+								boolean hadChars = false;
+								for (int ch = reader.read(); ch >= 0; ch = reader.read(), c++) {
+									if (c > 0 && c % 4 == 0) {
+										line.append(' ');
+									}
+									if (ch == '\b') {
+										hadChars = true;
+										line.append("\\b");
+									} else if (ch == '\r') {
+										hadChars = true;
+										line.append("\\r");
+									} else if (ch == '\n') {
+										hadChars = true;
+										line.append("\\n");
+									} else if (ch == '\t') {
+										hadChars = true;
+										line.append("\\t");
+									} else if (ch == '\f') {
+										hadChars = true;
+										line.append("\\f");
+									} else if (ch == ' ') {
+										hadChars = true;
+										line.append("sp");
+									} else if (ch < ' ') {
+										line.append("  ");
+									} else {
+										hadChars = true;
+										line.append((char) ch).append(' ');
+									}
+								}
+								if (hadChars) {
+									addLine(line, end, false);
+									lineCount++;
+								}
+								line.setLength(0);
+							}
+							buffer.reset();
+							line.append(start + byteCount).append(": ");
 						} else {
 							line.append(' ');
 						}
 					}
+					buffer.write(read);
 					StringUtils.printHexByte(chars, read);
 					end++;
 				}
@@ -273,5 +357,62 @@ public class FileContentViewer extends JPanel {
 			theEnd.set(end, null);
 			canScrollForward.set(!atEnd, null);
 		});
+	}
+
+	private long[] searchFor(String content) throws IOException {
+		ObservableFile file = theFile.get();
+		if (file == null) {
+			throw new IOException("No file selected");
+		}
+		long length = file.length();
+		BooleanSupplier canceled = () -> false;
+		try (InputStream in = file.read(theStart.get(), canceled)) {
+			CountingInputStream counting = new CountingInputStream(new BufferedInputStream(in));
+			@SuppressWarnings("resource")
+			Reader reader = new InputStreamReader(counting, Charset.forName(theViewMode.get().equals("UTF-16") ? "UTF-16" : "UTF-8"));
+			int matchLength = 0;
+			long lastLine = 0, lastLineBut1 = 0;
+			EventQueue.invokeLater(() -> {
+				isSearching.set("Searching...0%", null);
+			});
+			int charCount = 0;
+			int startPos = 0;
+			for (int c = reader.read(); c >= 0; c = reader.read()) {
+				if (charCount == 1_000_000) {
+					charCount = 0;
+					int newPercent = (int) (counting.getPosition() * 1000.0 / length);
+					EventQueue.invokeLater(() -> {
+						isSearching.set(new StringBuilder("Searching...").append(newPercent / 10).append('.').append(newPercent % 10)
+								.append('%').toString(), null);
+					});
+				}
+				if (c == '\n' || c == 0) {
+					lastLineBut1 = lastLine;
+					lastLine = counting.getPosition();
+					matchLength = 0;
+				} else if (c == content.charAt(matchLength)) {
+					if (matchLength == 0) {
+						startPos=0;
+					}
+					matchLength++;
+					if (matchLength == content.length()) {
+						break;
+					}
+				} else {
+					matchLength=0;
+				}
+				charCount++;
+			}
+			if (matchLength == content.length()) {
+				return new long[] { lastLineBut1, startPos };
+			} else {
+				return null;
+			}
+		} catch (IOException e) {
+			if (file.isDirectory()) {
+				return null;
+			}
+			throw e;
+		}
 	}
 }
