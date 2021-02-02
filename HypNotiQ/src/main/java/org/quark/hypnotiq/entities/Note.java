@@ -16,9 +16,6 @@ public interface Note extends NamedEntity, Identified {
 	Instant getOccurred();
 	Note setOccurred(Instant occurred);
 
-	NoteStatus getStatus();
-	Note setStatus(NoteStatus status);
-
 	String getContent();
 	Note setContent(String content);
 

@@ -75,7 +75,6 @@ import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.qommons.threading.QommonsTimer;
 import org.quark.hypnotiq.entities.Note;
-import org.quark.hypnotiq.entities.NoteStatus;
 import org.quark.hypnotiq.entities.Notification;
 import org.quark.hypnotiq.entities.Subject;
 
@@ -681,11 +680,6 @@ public class HypNotiQMain extends JPanel {
 									.formatText(t -> t == null ? ""
 											: QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
 													QommonsUtils.TimePrecision.SECONDS, TimeZone.getDefault(), 0, null)))//
-							.withColumn("Status", NoteStatus.class, Note::getStatus,
-									col -> col.withMutation(mut -> mut.mutateAttribute((note, status) -> {
-										note.setStatus(status);
-										note.setModified(Instant.now());
-									}).asCombo(NoteStatus::name, ObservableCollection.of(NoteStatus.class, NoteStatus.values()))))//
 							.withColumn("Noted", Instant.class, Note::getNoted,
 									col -> col.withWidths(100, 150, 300)
 											.formatText(t -> QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(),
@@ -711,7 +705,6 @@ public class HypNotiQMain extends JPanel {
 										.with(Note::getNoted, now)//
 										.with(Note::getOccurred, now)//
 										.with(Note::getModified, now)//
-										.with(Note::getStatus, NoteStatus.Waiting)//
 										.create().get();
 								selectNote(note);
 								return note;
@@ -1078,7 +1071,6 @@ public class HypNotiQMain extends JPanel {
 					return null;
 				}), SpinnerFormat.NUMERICAL_TEXT, tf -> tf.fill())//
 				.addTextField("Occurred", EntityReflector.observeField(value, Note::getOccurred), PAST_DATE_FORMAT, tf -> tf.fill())//
-				.addComboField("Status", EntityReflector.observeField(value, Note::getStatus), null, NoteStatus.values())//
 				.addTextArea(null, EntityReflector.observeField(value, Note::getContent), Format.TEXT,
 						tf -> tf.fill().fillV().modifyEditor(ta -> ta.withRows(8).setSelectAllOnFocus(false)))//
 				.addTable(activeNots, notifications -> {
