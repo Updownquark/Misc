@@ -85,8 +85,8 @@ public class HypNotiQMain extends JPanel {
 	private static final SpinnerFormat<Instant> PAST_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
 			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.PAST));
 	private static final Pattern SUBJECT_PATTERN=Pattern.compile("\\#"//
-			+ "[a-zA-Z_$&()~:;\\[\\]\\{\\}|\\\\.\\<\\>\\?0-9]*"//
-			+ "[a-zA-Z_$&()~:;\\[\\]\\{\\}|\\\\.\\<\\>\\?/]*");
+			+ "[a-zA-Z_$&()~:;\\[\\]\\{\\}|\\\\.\\<\\>\\?/0-9]+");
+	private static final Pattern ALL_NUMBERS = Pattern.compile("\\d*");
 
 	private final ObservableConfig theConfig;
 	private final ObservableConfigParseSession theSession;
@@ -286,6 +286,10 @@ public class HypNotiQMain extends JPanel {
 			Matcher subjectMatch=SUBJECT_PATTERN.matcher(content);
 			while(subjectMatch.find()) {
 				String subjectName=subjectMatch.group().substring(1).toLowerCase();
+				if (subjectName.charAt(0) == '/')
+					continue;
+				else if (ALL_NUMBERS.matcher(subjectName).matches())
+					continue;
 				refNames.add(subjectName);
 			}
 			boolean[] modified = new boolean[1];
