@@ -27,6 +27,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.BorderFactory;
 import javax.swing.CellEditor;
@@ -83,6 +85,9 @@ public class HypNotiQMain extends JPanel {
 			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.FUTURE));
 	private static final SpinnerFormat<Instant> PAST_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
 			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.PAST));
+	private static final Pattern SUBJECT_PATTERN=Pattern.compile("\\#"//
+			+ "[a-zA-Z_$&()~:;\\[\\]\\{\\}|\\\\.\\<\\>\\?0-9]*"//
+			+ "[a-zA-Z_$&()~:;\\[\\]\\{\\}|\\\\.\\<\\>\\?/]*");
 
 	private final ObservableConfig theConfig;
 	private final ObservableConfigParseSession theSession;
@@ -91,7 +96,7 @@ public class HypNotiQMain extends JPanel {
 	private final ObservableCollection<ActiveNotification> theNotifications;
 	private final ObservableSortedCollection<ActiveNotification> theActiveNotifications;
 	private final ObservableMultiMap<Long, ActiveNotification> theNotificationsById;
-	private final ObservableMap<String, Subject> theSubjectByRefString;
+	private final ObservableMap<String, Subject> theSubjectByName;
 	private final QommonsTimer.TaskHandle theAlertTask;
 
 	private final TrayIcon theTrayIcon;
@@ -133,11 +138,8 @@ public class HypNotiQMain extends JPanel {
 		theSession = session;
 		theSubjects = subjects;
 		theNotes = notes;
-		theSubjectByRefString = theSubjects.getValues().reverse().flow().groupBy(String.class, s -> {
-			String name = s.getName();
-			name = name.replaceAll("\\s", "_");
-			return name;
-		}, (__, s) -> s).gather().singleMap(true);
+		theSubjectByName = theSubjects.getValues().reverse().flow()
+				.groupBy(String.class, s->s.getName().toLowerCase(), (__, s) -> s).gather().singleMap(true);
 		theNotifications = ObservableCollection.build(ActiveNotification.class).safe(false).build();
 		theActiveNotifications = theNotifications.flow().filter(n -> n.getNextAlertTime() == null ? "Not Active" : null)
 				.sorted(ActiveNotification::compareTo).collect();
@@ -206,6 +208,7 @@ public class HypNotiQMain extends JPanel {
 						}
 						break;
 					} else if (terminal && evt.changeType == CollectionChangeType.remove && target.getName().equals("subject")) {
+						//TODO Need this now?
 						Subject subject = (Subject) target.getParsedItem(theSession);
 						if (subject == null || EntityConfigFormat.getConfig(subject) != target) {
 							continue;
@@ -280,39 +283,32 @@ public class HypNotiQMain extends JPanel {
 				return;
 			}
 			String content = evt.getNewValue().getContent();
-			Set<Subject> refs = new LinkedHashSet<>();
-			StringBuilder refName = new StringBuilder();
-			boolean isRef = false;
-			for (int c = 0; c < content.length(); c++) {
-				if (isRef) {
-					if (Character.isWhitespace(content.charAt(c))) {
-						Subject sub = theSubjectByRefString.get(refName.toString());
-						if (sub != null) {
-							refs.add(sub);
-						}
-						isRef = false;
-						refName.setLength(0);
-					} else {
-						refName.append(content.charAt(c));
-					}
-				} else if (content.charAt(c) == '@') {
-					isRef = true;
-				}
-			}
-			if (refName.length() > 0) {
-				Subject sub = theSubjectByRefString.get(refName.toString());
-				if (sub != null) {
-					refs.add(sub);
-				}
+			Set<String> refNames = new LinkedHashSet<>();
+			Matcher subjectMatch=SUBJECT_PATTERN.matcher(content);
+			while(subjectMatch.find()) {
+				String subjectName=subjectMatch.group().substring(1).toLowerCase();
+				refNames.add(subjectName);
 			}
 			boolean[] modified = new boolean[1];
-			CollectionUtils.synchronize(evt.getNewValue().getReferences(), new ArrayList<>(refs))//
-					.simple(s -> s).rightOrder().commonUsesLeft().onLeft(left -> {
+			CollectionUtils
+					.<Subject, String>synchronize(evt.getNewValue().getReferences(), new ArrayList<>(refNames),
+							(sub, name) -> sub.getName().equals(name))//
+					.simple(s -> {
+						Subject sub=theSubjectByName.get(s);
+						if(sub==null) {
+							sub=theSubjects.create()//
+									.with(Subject::getName, s)//
+									.create().get();
+						}
+						sub.getReferences().add(evt.getNewValue());
+						return sub;
+					}).rightOrder().commonUsesLeft().onLeft(left -> {
 						modified[0] = true;
 						left.getLeftValue().getReferences().remove(evt.getNewValue());
+						if(left.getLeftValue().getReferences().isEmpty())
+							theSubjects.getValues().remove(left.getLeftValue());
 					}).onRight(right -> {
 						modified[0] = true;
-						right.getRightValue().getReferences().add(evt.getNewValue());
 					}).adjust();
 		});
 		theSnoozeAllItem = new MenuItem("Snooze All 5 min");
@@ -584,7 +580,7 @@ public class HypNotiQMain extends JPanel {
 					table.fill().fillV()//
 							.withFiltering(filter)//
 							.withItemName("Subject")//
-							.withNameColumn(Subject::getName, Subject::setName, true, col -> col.withWidths(50, 120, 300))//
+							.withNameColumn(Subject::getName, null, true, col -> col.withWidths(50, 120, 300))//
 							.withColumn("Last Mentioned", Instant.class, subject -> {
 								if (subject.getReferences().isEmpty()) {
 									return null;
@@ -605,15 +601,15 @@ public class HypNotiQMain extends JPanel {
 								}
 							})//
 							.withSelection(theSelectedSubject, false)//
-							.withAdd(() -> {
+							/*.withAdd(() -> {
 								// Don't select the subject--it doesn't have anything in the timeline, so just edit it here inline
 								return theSubjects.create()//
 										.with(Subject::getName,
 												StringUtils.getNewItemName(theSubjects.getValues(), Subject::getName, "New Subject",
 														StringUtils.SIMPLE_DUPLICATES))//
 										.create().get();
-							}, null)//
-							.withRemove(subjects -> {
+							}, null)//*/
+							/*.withRemove(subjects -> {
 								// TODO Not the best, since deleting multiple subjects might leave more "orphaned" notes
 								List<Note> notes = new ArrayList<>();
 								for (Subject subject : subjects) {
@@ -644,7 +640,7 @@ public class HypNotiQMain extends JPanel {
 								}
 
 								theSubjects.getValues().removeAll(subjects);
-							}, mod -> mod.confirmForItems("Confirm Subject Deletion", "Permanently delete", "?", true))//
+							}, mod -> mod.confirmForItems("Confirm Subject Deletion", "Permanently delete", "?", true))//*/
 					;
 				});
 	}
