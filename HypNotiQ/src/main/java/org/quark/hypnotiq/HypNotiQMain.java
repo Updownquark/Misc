@@ -1393,6 +1393,8 @@ public class HypNotiQMain extends JPanel {
 			} else if (day >= 0) {// X days before the end of the month
 				Calendar cal = TimeUtils.CALENDAR.get();
 				cal.setTimeInMillis(start.toEpochMilli());
+				cal.set(Calendar.DAY_OF_MONTH, 1);
+				cal.add(Calendar.MONTH, 1);
 				cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH) - day);
 				return Instant.ofEpochMilli(cal.getTimeInMillis());
 			} else {
