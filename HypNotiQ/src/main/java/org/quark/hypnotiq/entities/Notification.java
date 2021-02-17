@@ -3,24 +3,17 @@ package org.quark.hypnotiq.entities;
 import java.time.Instant;
 
 import org.observe.config.ParentReference;
-import org.observe.util.NamedEntity;
+import org.qommons.Nameable;
 
-public interface Notification extends NamedEntity {
+public interface Notification extends Nameable {
 	@ParentReference
-	Note getNote();
+	Event getEvent();
 
-	Instant getInitialTime();
-	Notification setInitialTime(Instant time);
+	@Override
+	Notification setName(String name);
 
-	/**
-	 * @return The recurrence interval of this Notification. This value is a string representation of the interval like "1d" or "3mo" or
-	 *         "1y". There is no standard representation I know of for variable intervals like months and years, so this must be a String.
-	 */
-	String getRecurInterval();
-	Notification setRecurInterval(String recur);
-
-	Instant getEndTime();
-	Notification setEndTime(Instant end);
+	String getBefore();
+	Notification setBefore(String before);
 
 	int getSnoozeCount();
 	Notification setSnoozeCount(int snoozeCount);
@@ -28,9 +21,6 @@ public interface Notification extends NamedEntity {
 	Instant getSnoozeTime();
 	Notification setSnoozeTime(Instant snoozeTime);
 
-	boolean isActive();
-	Notification setActive(boolean active);
-
-	Instant getLastAlertTime();
-	Notification setLastAlertTime(Instant lastAlertTime);
+	Instant getLastDismiss();
+	Notification setLastDismiss(Instant lastDismiss);
 }
