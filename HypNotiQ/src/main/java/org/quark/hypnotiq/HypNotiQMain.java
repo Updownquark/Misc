@@ -66,6 +66,7 @@ import org.observe.util.swing.PanelPopulation;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.observe.util.swing.TableContentControl;
 import org.qommons.LambdaUtils;
+import org.qommons.Named;
 import org.qommons.QommonsUtils;
 import org.qommons.QommonsUtils.TimePrecision;
 import org.qommons.StringUtils;
@@ -94,7 +95,7 @@ public class HypNotiQMain extends JPanel {
 	private static final SpinnerFormat<Instant> PAST_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
 			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.PAST));
 	private static final Pattern SUBJECT_PATTERN = Pattern.compile("\\#"//
-			+ "[a-zA-Z_$&()~:;\\[\\]\\{\\}|\\\\.\\<\\>\\?/0-9]{2,}");
+			+ "[a-zA-Z_\\./0-9]{2,}");
 	private static final Pattern ALL_NUMBERS = Pattern.compile("\\d*");
 	private static final Duration MAX_SLEEP = Duration.ofSeconds(10);
 
@@ -294,47 +295,52 @@ public class HypNotiQMain extends JPanel {
 			EventQueue.invokeLater(() -> SystemTray.getSystemTray().remove(theTrayIcon));
 		}, "HypNotiQ Shutdown"));
 
+		boolean[] subjectAdjustmentReentrant = new boolean[1];
 		theNotes.getValues().onChange(evt -> {
-			if (evt.getType() != CollectionChangeType.set) {
+			if (subjectAdjustmentReentrant[0] || evt.getType() != CollectionChangeType.set) {
 				return;
 			}
-			String content = evt.getNewValue().getContent();
-			Set<String> refNames = new LinkedHashSet<>();
-			Matcher subjectMatch = SUBJECT_PATTERN.matcher(content);
-			while (subjectMatch.find()) {
-				String subjectName = subjectMatch.group().substring(1).toLowerCase();
-				if (subjectName.charAt(0) == '/') {
-					continue;
-				} else if (ALL_NUMBERS.matcher(subjectName).matches()) {
-					continue;
+			subjectAdjustmentReentrant[0] = true;
+			try {
+				String content = evt.getNewValue().getContent();
+				Set<String> refNames = new LinkedHashSet<>();
+				Matcher subjectMatch = SUBJECT_PATTERN.matcher(content);
+				while (subjectMatch.find()) {
+					String subjectName = subjectMatch.group().substring(1).toLowerCase();
+					if (subjectName.charAt(0) == '/') {
+						continue;
+					} else if (ALL_NUMBERS.matcher(subjectName).matches()) {
+						continue;
+					}
+					refNames.add(subjectName);
 				}
-				refNames.add(subjectName);
+				List<Subject> oldRefs = evt.getNewValue().getReferences();
+				boolean[] modified = new boolean[1];
+				CollectionUtils.<Subject, String> synchronize(oldRefs, new ArrayList<>(refNames), (sub, name) -> sub.getName().equals(name))//
+						.simple(s -> {
+							Subject sub = theSubjectByName.get(s);
+							if (sub == null) {
+								sub = theSubjects.create()//
+										.with(Subject::getName, s)//
+										.create().get();
+							}
+							sub.getReferences().add(evt.getNewValue());
+							return sub;
+						}).rightOrder().commonUsesLeft().onLeft(left -> {
+							modified[0] = true;
+							left.getLeftValue()//
+									.getReferences()//
+									.remove(//
+											evt.getNewValue());
+							if (left.getLeftValue().getReferences().isEmpty()) {
+								theSubjects.getValues().remove(left.getLeftValue());
+							}
+						}).onRight(right -> {
+							modified[0] = true;
+						}).adjust();
+			} finally {
+				subjectAdjustmentReentrant[0] = false;
 			}
-			boolean[] modified = new boolean[1];
-			CollectionUtils
-					.<Subject, String> synchronize(evt.getNewValue().getReferences(), new ArrayList<>(refNames),
-							(sub, name) -> sub.getName().equals(name))//
-					.simple(s -> {
-						Subject sub = theSubjectByName.get(s);
-						if (sub == null) {
-							sub = theSubjects.create()//
-									.with(Subject::getName, s)//
-									.create().get();
-						}
-						sub.getReferences().add(evt.getNewValue());
-						return sub;
-					}).rightOrder().commonUsesLeft().onLeft(left -> {
-						modified[0] = true;
-						left.getLeftValue()//
-								.getReferences()//
-								.remove(//
-										evt.getNewValue());
-						if (left.getLeftValue().getReferences().isEmpty()) {
-							theSubjects.getValues().remove(left.getLeftValue());
-						}
-					}).onRight(right -> {
-						modified[0] = true;
-					}).adjust();
 		});
 		theSnoozeAllItem = new MenuItem("Snooze All 5 min");
 		theSnoozeAllItem.addActionListener(evt -> {
@@ -611,7 +617,7 @@ public class HypNotiQMain extends JPanel {
 				.addTextField(null, filter, TableContentControl.FORMAT,
 						tf -> tf.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP)
 								.modifyEditor(tf2 -> tf2.setEmptyText("Search...").setCommitOnType(true)))//
-				.addTable(theSubjects.getValues(), table -> {
+				.addTable(theSubjects.getValues().flow().sorted(Named.DISTINCT_NUMBER_TOLERANT).collect(), table -> {
 					table.fill().fillV()//
 							.withFiltering(filter)//
 							.withItemName("Subject")//
