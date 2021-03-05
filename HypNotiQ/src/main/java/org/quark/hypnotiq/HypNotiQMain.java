@@ -49,6 +49,7 @@ import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.config.ObservableConfigFormat.EntityConfigFormat;
 import org.observe.config.ObservableConfigParseSession;
+import org.observe.config.ObservableConfigPath;
 import org.observe.config.SyncValueCreator;
 import org.observe.config.SyncValueSet;
 import org.observe.ext.util.GitHubApiHelper;
@@ -179,7 +180,7 @@ public class HypNotiQMain extends JPanel {
 		}
 		theAlertTask = QommonsTimer.getCommonInstance().build(this::processNotifications, null, false).onEDT();
 		// Watch for entity changes
-		theConfig.watch(theConfig.buildPath(ObservableConfig.ANY_NAME).multi(true).build()).act(evt -> {
+		theConfig.watch(ObservableConfigPath.buildPath(ObservableConfigPath.ANY_NAME).multi(true).build()).act(evt -> {
 			if (theEventCallbackLock) {
 				return;
 			}
@@ -1476,7 +1477,7 @@ public class HypNotiQMain extends JPanel {
 				}
 			}
 			theEventOccurrence = eventTime;
-			theNextNotification = eventTime == null ? null : duration.times(-1).addTo(eventTime, TimeZone.getDefault());
+			theNextNotification = eventTime == null ? null : duration.addTo(eventTime, TimeZone.getDefault());
 		}
 	}
 }
