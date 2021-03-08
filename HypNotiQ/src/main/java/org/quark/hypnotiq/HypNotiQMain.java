@@ -297,12 +297,12 @@ public class HypNotiQMain extends JPanel {
 		}, "HypNotiQ Shutdown"));
 
 		boolean[] subjectAdjustmentReentrant = new boolean[1];
-		theNotes.getValues().onChange(evt -> {
+		theNotes.getValues().onChange(evt -> EventQueue.invokeLater(() -> {
 			if (subjectAdjustmentReentrant[0] || evt.getType() != CollectionChangeType.set) {
 				return;
 			}
 			subjectAdjustmentReentrant[0] = true;
-			try {
+			try (Transaction t = theConfig.lock(true, null)) { // Can't use evt as a cause because that's from a different thread
 				String content = evt.getNewValue().getContent();
 				Set<String> refNames = new LinkedHashSet<>();
 				Matcher subjectMatch = SUBJECT_PATTERN.matcher(content);
@@ -342,7 +342,7 @@ public class HypNotiQMain extends JPanel {
 			} finally {
 				subjectAdjustmentReentrant[0] = false;
 			}
-		});
+		}));
 		theSnoozeAllItem = new MenuItem("Snooze All 5 min");
 		theSnoozeAllItem.addActionListener(evt -> {
 			theEventCallbackLock = true;
@@ -990,7 +990,7 @@ public class HypNotiQMain extends JPanel {
 
 	private void populateSubjectEditor(PanelPopulator<?, ?> panel, Subject value) {
 		ObservableSortedCollection<Note> references = value.getReferences().flow().sorted((n1, n2) -> {
-			return n1.getModified().compareTo(n2.getModified());
+			return -n1.getModified().compareTo(n2.getModified());
 		}).collect();
 
 		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class).safe(false)
