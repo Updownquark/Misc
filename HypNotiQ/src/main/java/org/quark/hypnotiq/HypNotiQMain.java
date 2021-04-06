@@ -305,19 +305,23 @@ public class HypNotiQMain extends JPanel {
 			try (Transaction t = theConfig.lock(true, null)) { // Can't use evt as a cause because that's from a different thread
 				String content = evt.getNewValue().getContent();
 				Set<String> refNames = new LinkedHashSet<>();
-				Matcher subjectMatch = SUBJECT_PATTERN.matcher(content);
-				while (subjectMatch.find()) {
-					String subjectName = subjectMatch.group().substring(1).toLowerCase();
-					if (subjectName.charAt(0) == '/') {
-						continue;
-					} else if (ALL_NUMBERS.matcher(subjectName).matches()) {
-						continue;
+				if (content != null) {
+					Matcher subjectMatch = SUBJECT_PATTERN.matcher(content);
+					while (subjectMatch.find()) {
+						String subjectName = subjectMatch.group().substring(1).toLowerCase();
+						if (subjectName.charAt(0) == '/') {
+							continue;
+						} else if (ALL_NUMBERS.matcher(subjectName).matches()) {
+							continue;
+						}
+						refNames.add(subjectName);
 					}
-					refNames.add(subjectName);
 				}
 				List<Subject> oldRefs = evt.getNewValue().getReferences();
 				boolean[] modified = new boolean[1];
-				CollectionUtils.<Subject, String> synchronize(oldRefs, new ArrayList<>(refNames), (sub, name) -> sub.getName().equals(name))//
+				CollectionUtils
+						.<Subject, String> synchronize(oldRefs, new ArrayList<>(refNames),
+								(sub, name) -> sub != null && sub.getName().equals(name))//
 						.simple(s -> {
 							Subject sub = theSubjectByName.get(s);
 							if (sub == null) {
@@ -895,18 +899,59 @@ public class HypNotiQMain extends JPanel {
 						if (action.startsWith("Snooze")) {
 							String durationStr = action.substring("Snooze".length()).trim();
 							Duration duration;
-							if (durationStr.equals("...")) {
-								SettableValue<Duration> durationValue = SettableValue.build(Duration.class).safe(false).build();
+							if (durationStr.endsWith("For...")) {
+								CellEditor editor = table.getEditor().getCellEditor();
+								if (editor != null) {
+									editor.cancelCellEditing();
+								}
+								SettableValue<Duration> durationValue = SettableValue.build(Duration.class).safe(false)//
+										.withValue(Duration.ofDays(1)).build();
 								SimpleObservable<Void> temp = SimpleObservable.build().safe(false).build();
 								ObservableTextField<Duration> durationField = new ObservableTextField<>(durationValue,
-										SpinnerFormat.flexDuration(false), temp);
-								durationStr = JOptionPane.showInputDialog(container, durationField, "Select Snooze Time",
-										JOptionPane.QUESTION_MESSAGE);
-								if (durationStr == null || durationStr.isEmpty()) {
+										SpinnerFormat.flexDuration(false), temp).setCommitOnType(true).setCommitAdjustmentImmediately(true);
+								if (JOptionPane.showConfirmDialog(container, durationField, "Select Snooze Duration",
+										JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) {
 									return;
 								}
 								duration = durationValue.get();
+								if (duration == null) {
+									return;
+								}
 								temp.onNext(null);
+							} else if (durationStr.endsWith("Until...")) {
+								CellEditor editor = table.getEditor().getCellEditor();
+								if (editor != null) {
+									editor.cancelCellEditing();
+								}
+								Calendar defaultUntil = TimeUtils.CALENDAR.get();
+								defaultUntil.setTimeInMillis(System.currentTimeMillis() + 24L * 60 * 60 * 1000);
+								defaultUntil.set(Calendar.MILLISECOND, 0);
+								defaultUntil.set(Calendar.SECOND, 0);
+								defaultUntil.set(Calendar.MINUTE, 0);
+								SettableValue<Instant> untilValue = SettableValue.build(Instant.class).safe(false)//
+										.withValue(Instant.ofEpochMilli(defaultUntil.getTimeInMillis())).build();
+								SimpleObservable<Void> temp = SimpleObservable.build().safe(false).build();
+								ObservableTextField<Instant> untilField = new ObservableTextField<>(untilValue, FUTURE_DATE_FORMAT, temp)
+										.setCommitOnType(true).setCommitAdjustmentImmediately(true);
+								if (JOptionPane.showConfirmDialog(container, untilField, "Select Snooze Time",
+										JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) {
+									return;
+								}
+								Instant until = untilValue.get();
+								if (until == null) {
+									return;
+								}
+								temp.onNext(null);
+								if (until.compareTo(now) < 0) {
+									JOptionPane.showMessageDialog(container,
+											"The selected time (" + FUTURE_DATE_FORMAT.format(until)
+													+ ") has already passed.  Please select a time in the future to snooze until",
+											"Selected Snooze Time is Past", JOptionPane.ERROR_MESSAGE);
+									return;
+								}
+								not.getNotification().setSnoozeCount(not.getNotification().getSnoozeCount() + 1);
+								not.getNotification().setSnoozeTime(until);
+								return;
 							} else {
 								try {
 									duration = QommonsUtils.parseDuration(durationStr);
