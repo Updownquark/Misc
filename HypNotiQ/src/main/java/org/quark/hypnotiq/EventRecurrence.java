@@ -40,6 +40,8 @@ public class EventRecurrence {
 	 * @param reference
 	 *            The reference time of the event
 	 * @return A recurrence to use for a recurring event
+	 * @throws ParseException
+	 *             If the recurrence string could not be parsed
 	 */
 	public static EventRecurrence of(String recur, Instant reference) throws ParseException {
 		if (reference == null || recur == null || recur.isEmpty()) {
@@ -101,10 +103,12 @@ public class EventRecurrence {
 		return new EventRecurrence(recur, duration, months, number, day);
 	}
 
+	/** @return The storage string representing this recurrence */
 	public String getStored() {
 		return theStored;
 	}
 
+	/** @return The duration represented by this recurrence. The duration is only a component of recurrence, and may be an estimate. */
 	public ParsedDuration getDuration() {
 		return theDuration;
 	}
@@ -114,9 +118,12 @@ public class EventRecurrence {
 	 *            The reference time for the event
 	 * @param relative
 	 *            Any arbitrary instant
+	 * @param after
+	 *            Whether to return a time after <code>relative</code> or before
 	 * @param strict
-	 *            Whether to return a time strictly after <code>after</code>. If false, a time equal to <code>after</code> may be returned.
-	 * @return The occurrence of the event that occurs soonest after (or on, if not <code>strict</code>) <code>after</code>
+	 *            Whether to return a time strictly after/before <code>relative</code>. If false, a time equal to <code>reference</code> may
+	 *            be returned.
+	 * @return The occurrence of the event that occurs closest to <code>reference</code> with the given constraints
 	 */
 	public Instant getOccurrence(Instant reference, Instant relative, boolean after, boolean strict) {
 		Instant occur;
@@ -177,7 +184,9 @@ public class EventRecurrence {
 	/**
 	 * @param occurrence
 	 *            An occurrence of the event
-	 * @return The occurrence of the event occurring immediately after <code>lastOccurrence</code>
+	 * @param next
+	 *            Whether to return the next or previous occurrence
+	 * @return The occurrence of the event occurring immediately after/before <code>lastOccurrence</code>
 	 */
 	public Instant adjacentOccurrence(Instant occurrence, boolean next) {
 		if (theNumber >= 0) { // Xth [weekday] of the month
