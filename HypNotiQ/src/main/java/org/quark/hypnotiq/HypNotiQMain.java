@@ -1359,10 +1359,12 @@ public class HypNotiQMain extends JPanel {
 			return theEvent;
 		}
 
+		/** @return The recurrence scheme for this event */
 		public EventRecurrence getRecurrence() {
 			return theRecurrence;
 		}
 
+		/** @return All notifications configured for this event */
 		public ObservableCollection<ActiveNotification> getNotifications() {
 			return theNotifications;
 		}
@@ -1372,6 +1374,17 @@ public class HypNotiQMain extends JPanel {
 			return getAdjacent(Instant.now(), true, true);
 		}
 
+		/**
+		 * @param time
+		 *            The time to get the closest event occurrence to
+		 * @param after
+		 *            Whether to get the occurrence after or before the given time
+		 * @param strict
+		 *            False if the given time is acceptable as a return value, or true if the return value must be strictly after or before
+		 *            the given time
+		 * @return The closest occurrence time of this event after/before the given time, or null if this even does not occur in that time
+		 *         range
+		 */
 		public Instant getAdjacent(Instant time, boolean after, boolean strict) {
 			if (!theEvent.isActive()) {
 				return null;
@@ -1424,6 +1437,7 @@ public class HypNotiQMain extends JPanel {
 		}
 	}
 
+	/** Wraps a notification of an event and contains methods to determine when it should be shown to the user */
 	public static class ActiveNotification implements Comparable<ActiveNotification> {
 		private final ActiveEvent theEvent;
 		private final Notification theNotification;
@@ -1431,16 +1445,24 @@ public class HypNotiQMain extends JPanel {
 		private Instant theNextNotification;
 		ElementId theElement;
 
+		/**
+		 * @param event
+		 *            The event that the notification is for
+		 * @param notification
+		 *            The notification entity to wrap
+		 */
 		public ActiveNotification(ActiveEvent event, Notification notification) {
 			theEvent = event;
 			theNotification = notification;
 			update();
 		}
 
+		/** @return The event occurrence that the current or next occurrence of this notification is for */
 		public Instant getEventOccurrence() {
 			return theEventOccurrence;
 		}
 
+		/** @return The current or next occurrence time of this notification */
 		public Instant getNextNotification() {
 			return theNextNotification;
 		}
@@ -1453,10 +1475,12 @@ public class HypNotiQMain extends JPanel {
 			computeNextAlert();
 		}
 
+		/** @return The event that this notification is for */
 		public ActiveEvent getEvent() {
 			return theEvent;
 		}
 
+		/** @return The wrapped notification */
 		public Notification getNotification() {
 			return theNotification;
 		}
@@ -1491,16 +1515,19 @@ public class HypNotiQMain extends JPanel {
 				theEventOccurrence = theNextNotification = null;
 				return;
 			}
-			Instant eventTime;
+			Instant eventTime, notifyTime;
 			if (lastDismiss == null) {
 				eventTime = start;
+				notifyTime = duration.addTo(eventTime, TimeZone.getDefault());
 			} else {
 				Instant eventGuessTime = duration.addTo(lastDismiss, TimeZone.getDefault());
 				if (theEvent.getRecurrence() == null) {
 					if (duration.addTo(start, TimeZone.getDefault()).compareTo(lastDismiss) > 0) {
 						eventTime = start;
+						notifyTime = duration.addTo(eventTime, TimeZone.getDefault());
 					} else {
 						eventTime = null;
+						notifyTime = null;
 					}
 				} else {
 					if (theEvent.getEvent().getEndTime() != null && eventGuessTime.compareTo(theEvent.getEvent().getEndTime()) > 0) {
@@ -1511,13 +1538,19 @@ public class HypNotiQMain extends JPanel {
 						if (eventTime.compareTo(start) < 0) {
 							eventTime = start;
 						}
-						while (eventTime.compareTo(lastDismiss) <= 0) {
+						notifyTime = duration.addTo(eventTime, TimeZone.getDefault());
+						while (notifyTime.compareTo(lastDismiss) <= 0) {
 							eventTime = theEvent.getRecurrence().adjacentOccurrence(eventTime, true);
 							if (theEvent.getEvent().getEndTime() != null && eventTime.compareTo(theEvent.getEvent().getEndTime()) > 0) {
 								eventTime = null;
+								notifyTime = null;
 								break;
+							} else {
+								notifyTime=duration.addTo(eventTime, TimeZone.getDefault());
 							}
 						}
+					} else {
+						notifyTime=null;
 					}
 				}
 			}
