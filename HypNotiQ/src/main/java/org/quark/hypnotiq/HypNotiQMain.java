@@ -774,9 +774,22 @@ public class HypNotiQMain extends JPanel {
 				deco.withBorder(BorderFactory.createLineBorder(Color.blue));
 			}
 		}).formatText(t -> {
-			return t == null ? ""
-					: QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES,
-							TimeZone.getDefault(), 0, null);
+			if (t == null) {
+				return "";
+			}
+			TimeZone tz = TimeZone.getDefault();
+			Calendar cal = TimeUtils.CALENDAR.get();
+			cal.setTimeZone(tz);
+			cal.setTimeInMillis(System.currentTimeMillis());
+			int day = cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR);
+			cal.setTimeInMillis(t.toEpochMilli());
+			StringBuilder str = new StringBuilder();
+			if (cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR) != day) {
+				str.append(TimeUtils.getWeekDaysAbbrev().get(cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY)).append(' ');
+			}
+			str.append(QommonsUtils.printRelativeTime(t.toEpochMilli(), System.currentTimeMillis(), QommonsUtils.TimePrecision.MINUTES, tz,
+					0, null));
+			return str.toString();
 		});
 	}
 
@@ -1286,7 +1299,7 @@ public class HypNotiQMain extends JPanel {
 			return r == null ? null : new AppPopulation.Version(r.getTagName(), r.getName(), r.getDescription());
 		}).withUpgrade(version -> {
 			try {
-				new GitHubApiHelper("Updownquark", "Misc").withTagPattern("Tasq-.*").upgradeToLatest(HypNotiQMain.class,
+				new GitHubApiHelper("Updownquark", "Misc").withTagPattern("HypNotiQ-.*").upgradeToLatest(HypNotiQMain.class,
 						builder.getTitle().get(), builder.getIcon().get());
 			} catch (IllegalStateException | IOException e) {
 				e.printStackTrace(System.out);
