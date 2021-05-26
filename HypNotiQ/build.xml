@@ -20,22 +20,22 @@
                 <attribute name="Main-Class" value="${main.class}"/>
                 <attribute name="Class-Path" value="."/>
             	<!--<attribute name="SplashScreen-Image" value="??.png"/>-->
-            	<section name="org/quark/ogame/uni/ui/">
+            	<section name="org/quark/hypnotiq/">
 	            	<attribute name="Specification-Title" value="${app.name}" />
             		<attribute name="Specification-Version" value="0.0.0" />
             		<attribute name="Specification-Vendor" value="${app.vendor}" />
-            		<attribute name="Implementation-Title" value="org.quark.ogame.uni.ui" />
+            		<attribute name="Implementation-Title" value="org.quark.hypnotiq" />
             		<attribute name="Implementation-Version" value="${app.version}" />
             	</section>
             </manifest>
             <fileset dir="${dir.buildfile}/target/classes"/>
-            <fileset dir="${dir.workspace}/Qommons/classes"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/log4j-1.2.13.jar"/>
+            <fileset dir="${dir.workspace}/Qommons/target/classes"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/log4j-1.2.16.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/servlet-api.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/jdom-2.0.1.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/hamcrest-core-1.3.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/junit-4.11.jar"/>
-            <fileset dir="${dir.workspace}/ObServe/classes"/>
+            <fileset dir="${dir.workspace}/ObServe/target/classes"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/guava-18.0.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-core-4.2.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-swing-4.2.jar"/>
