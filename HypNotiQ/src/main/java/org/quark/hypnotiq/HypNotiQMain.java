@@ -1274,9 +1274,9 @@ public class HypNotiQMain extends JPanel {
 	 */
 	public static void main(String[] args) {
 		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
+				.systemLandF()//
 				.disposeOnClose(false)//
-				.withConfig("hypnotiq").withConfigAt("HypNotiQ.xml")//
-				.saveOnMod(true).saveEvery(Duration.ofMinutes(5))//
+				.withConfig("hypnotiq")//
 				.withTitle("HypNotiQ")//
 				.withIcon(HypNotiQMain.class, "/icons/icons8-reminder-48.png")//
 				.enableCloseWithoutSave()//
@@ -1304,9 +1304,7 @@ public class HypNotiQMain extends JPanel {
 			} catch (IllegalStateException | IOException e) {
 				e.printStackTrace(System.out);
 			}
-		})).withBackups(backups -> backups.withBackupSize(1_000_000, 100_000_000).withDuration(Duration.ofDays(1), Duration.ofDays(30))
-				.withBackupCount(10, 100))//
-				.systemLandF()//
+		}))//
 				.withVisible(SettableValue.build(boolean.class).safe(false).withValue(false).build())// Not shown initially
 				.build((config, onBuilt) -> {
 					try {
