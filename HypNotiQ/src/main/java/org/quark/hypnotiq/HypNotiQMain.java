@@ -74,6 +74,7 @@ import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.DurationComponentType;
 import org.qommons.TimeUtils.ParsedDuration;
+import org.qommons.TimeUtils.RecurrenceInterval;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
@@ -1355,7 +1356,7 @@ public class HypNotiQMain extends JPanel {
 	/** Tracks the next (or current) alert time for each event */
 	public static class ActiveEvent {
 		private final Event theEvent;
-		private EventRecurrence theRecurrence;
+		private RecurrenceInterval theRecurrence;
 		ElementId theElement;
 		private final ObservableCollection<ActiveNotification> theNotifications;
 
@@ -1371,7 +1372,7 @@ public class HypNotiQMain extends JPanel {
 		}
 
 		/** @return The recurrence scheme for this event */
-		public EventRecurrence getRecurrence() {
+		public RecurrenceInterval getRecurrence() {
 			return theRecurrence;
 		}
 
@@ -1426,7 +1427,7 @@ public class HypNotiQMain extends JPanel {
 
 		void update() {
 			try {
-				theRecurrence = EventRecurrence.of(theEvent.getRecurInterval(), theEvent.getInitialTime());
+				theRecurrence = TimeUtils.parseRecurrenceInterval(theEvent.getRecurInterval(), theEvent.getInitialTime());
 			} catch (ParseException e) {
 				System.out.print(theEvent.getRecurInterval() + ": ");
 				e.printStackTrace(System.out);
