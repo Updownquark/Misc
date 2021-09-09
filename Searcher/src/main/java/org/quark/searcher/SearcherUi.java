@@ -78,7 +78,7 @@ public class SearcherUi extends JPanel {
 	}
 
 	public static enum FileAttributeRequirement {
-		Mabye, Yes, No;
+		Maybe, Yes, No;
 	}
 
 	public static interface FileAttributeMapEntry {
@@ -640,9 +640,11 @@ public class SearcherUi extends JPanel {
 		if (isCanceling) {
 			return;
 		}
-		if (fileMatcher!=null) {
+		boolean dir = file.isDirectory();
+		if (!dir && (filePattern == null || fileMatcher != null)) {
 			// TODO Attributes
-			Map<String, NamedGroupCapture> fileCaptures = QommonsUtils.getCaptureGroups(fileMatcher);
+			Map<String, NamedGroupCapture> fileCaptures = filePattern == null ? Collections.emptyMap()
+					: QommonsUtils.getCaptureGroups(fileMatcher);
 			boolean matches;
 			List<TextResult> contentMatches;
 			if (contentPattern != null) {
@@ -670,8 +672,8 @@ public class SearcherUi extends JPanel {
 				}
 			}
 		}
-		List<? extends BetterFile> children = file.listFiles();
-		if (children != null) {
+		if (dir) {
+			List<? extends BetterFile> children = file.listFiles();
 			searched[1]++;
 			for (BetterFile child : children) {
 				if (isCanceling) {
