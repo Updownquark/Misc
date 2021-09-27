@@ -641,7 +641,7 @@ public class SearcherUi extends JPanel {
 			return;
 		}
 		boolean dir = file.isDirectory();
-		if (!dir && (filePattern == null || fileMatcher != null)) {
+		if (filePattern == null || fileMatcher != null) {
 			// TODO Attributes
 			Map<String, NamedGroupCapture> fileCaptures = filePattern == null ? Collections.emptyMap()
 					: QommonsUtils.getCaptureGroups(fileMatcher);
