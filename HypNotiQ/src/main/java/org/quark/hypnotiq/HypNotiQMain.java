@@ -1499,7 +1499,19 @@ public class HypNotiQMain extends JPanel {
 
 		@Override
 		public int compareTo(ActiveNotification o) {
-			return theNextNotification.compareTo(o.theNextNotification);
+			// Not quite sure why this would ever happen, but apparently this gets called with a null notification sometimes
+			// before it gets removed from the sorted collection
+			if (theNextNotification == null) {
+				if (o.theNextNotification == null) {
+					return 0;
+				} else {
+					return 1;
+				}
+			} else if (o.theNextNotification == null) {
+				return -1;
+			} else {
+				return theNextNotification.compareTo(o.theNextNotification);
+			}
 		}
 
 		private void computeNextAlert() {
