@@ -75,32 +75,6 @@ public class SearcherUi extends JPanel {
 		}
 	};
 
-	public static interface PatternConfig {
-		String getPattern();
-
-		PatternConfig setPattern(String pattern);
-
-		boolean isCaseSensitive();
-
-		PatternConfig setCaseSensitive(boolean caseSensitive);
-	}
-
-	public static enum FileAttributeRequirement {
-		Maybe, Yes, No;
-
-		boolean matches(boolean value) {
-			switch (this) {
-			case Maybe:
-				return true;
-			case Yes:
-				return value;
-			case No:
-				return !value;
-			}
-			return true; // Just to make it compile
-		}
-	}
-
 	public static interface FileAttributeMapEntry {
 		FileBooleanAttribute getAttribute();
 
@@ -155,7 +129,7 @@ public class SearcherUi extends JPanel {
 		}
 	}
 
-	static class TextResult {
+	public static class TextResult {
 		final SearchResultNode fileResult;
 		final long position;
 		final long lineNumber;
@@ -942,8 +916,8 @@ public class SearcherUi extends JPanel {
 	}
 
 	private void populateConfigPanel(PanelPopulation.PanelPopulator<?, ?> configPanel) {
-		SpinnerFormat<Instant> dateFormat = SpinnerFormat.flexDate(Instant::now, "MMM dd, yyyy",
-				teo -> teo.withEvaluationType(RelativeTimeEvaluation.PAST).withMaxResolution(DateElementType.Minute));
+		SpinnerFormat<Instant> dateFormat = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
+				teo -> teo.withEvaluationType(RelativeTimeEvaluation.Past).withMaxResolution(DateElementType.Minute));
 		Format.SuperDoubleFormatBuilder sizeFormatBuilder = Format.doubleFormat(4).withUnit("b", true);
 		double k = 1024;
 		sizeFormatBuilder.withPrefix("k", k).withPrefix("M", k * k).withPrefix("G", k * k * k).withPrefix("T", k * k * k * k)//
@@ -1128,7 +1102,7 @@ public class SearcherUi extends JPanel {
 				)//
 				)//
 				.lastV(split2 -> split2.addTextArea(null, SettableValue.asSettable(theSelectedRenderedText, __ -> null), Format.TEXT,
-						tf -> tf.fill().fillV().modifyEditor(tf2 -> tf2.asHtml().setEditable(false)))))//
+						tf -> tf.fill().fillV().modifyEditor(tf2 -> tf2.asHtml(true).setEditable(false)))))//
 		;
 	}
 
