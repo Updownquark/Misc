@@ -16,12 +16,12 @@
 			<ext-model name="ext">
 				<ext-value name="workingDir" type="String" />
 				<ext-action name="searchAction" type="Void" />
-				<ext-value name="resultsRoot" type="QuickSearcher.SearchResultNode" />
+				<ext-value name="resultRoot" type="QuickSearcher.SearchResultNode" />
 				<ext-value name="status" type="QuickSearcher.SearchStatus" />
 				<ext-value name="statusText" type="String" />
 			</ext-model>
 			<config name="config" config-name="qommons-searcher">
-				<value name="zipLevel" type="int" default="10" />
+				<value name="zipLevel" type="int" default="10" config-path="zip-level" />
 				<file-source name="files" max-archive-depth="config.zipLevel">
 					<archive-method type="zip" />
 					<archive-method type="tar" />
@@ -30,7 +30,7 @@
 				<format name="fileFormat" type="file" file-source="files" working-dir="ext.workingDir" />
 				<format name="patternFormat" type="regex-format" />
 				<format name="byteFormat" type="double" sig-digs="4" unit="b" metric-prefixes-p2="true" />
-				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="Past" />
+				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="PAST" />
 				<simple-config-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" default="Maybe" />
 
 				<value name="x" type="int" />
@@ -48,7 +48,7 @@
 				<map name="fileRequirements" key-type="org.qommons.io.BetterFile.FileBooleanAttribute"
 					type="org.quark.searcher.FileAttributeRequirement" format="fileReqFormat" />
 				<value name="minSize" type="double" default="0" />
-				<value name="maxSize" type="double" default="QuickSearch.DEFAULT_MAX_SIZE" />
+				<value name="maxSize" type="double" default="${QuickSearcher.DEFAULT_MAX_SIZE}" />
 				<value name="minLM" type="java.time.Instant" default="Jan 01 1900 12:00am" />
 				<value name="maxLM" type="java.time.Instant" default="Jan 01 3000 12:00am" />
 				<!-- TODO Filter accept the mins/maxes above to keep max>min -->
@@ -65,7 +65,7 @@
 				</transform>
 				<value name="selectedResult" type="QuickSearcher.SearchResultNode" />
 				<transform name="textMatches" source="selectedResult">
-					<flatten function="QuickSearcher.SearchResultNode::getTextResults" />
+					<flatten function="QuickSearcher.SearchResultNode::getTextResults" null-to-null="true" />
 				</transform>
 				<value name="selectedTextMatch" type="QuickSearcher.TextResult" />
 				<transform name="selectedText" source="selectedTextMatch">
@@ -149,7 +149,7 @@
 				</box>
 			</field-panel>
 			<split orientation="vertical" split-position="${config.rightSplitDiv}">
-				<tree root="ext.resultsRoot" children="QuickSearcher.SearchResultNode::getChildren"
+				<tree root="ext.resultRoot" children="QuickSearcher.SearchResultNode::getChildren"
 					parent="QuickSearcher.SearchResultNode::getParent" selection="app.selectedResult">
 				</tree>
 				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">

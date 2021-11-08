@@ -192,7 +192,7 @@ public class QuickSearcher {
 				.with("resultRoot", ModelTypes.Value.forType(SearchResultNode.class), theResults)//
 				.with("status", ModelTypes.Value.forType(SearchStatus.class), theStatus)//
 				.with("statusText", ModelTypes.Value.forType(String.class), theStatusMessage)//
-				.with("search", ModelTypes.Action.forType(Void.class), ObservableAction.of(TypeTokens.get().VOID, __ -> {
+				.with("searchAction", ModelTypes.Action.forType(Void.class), ObservableAction.of(TypeTokens.get().VOID, __ -> {
 					QommonsTimer.getCommonInstance().offload(QuickSearcher.this::doSearch);
 					return null;
 				}).disableWith(//
@@ -232,7 +232,7 @@ public class QuickSearcher {
 			theMaxFileMatchLength = doc.getHead().getModels().get("config.maxFileMatchLength", ModelTypes.Value.forType(int.class))
 					.get(ui.getModels());
 			theDynamicExclusionPatterns = doc.getHead().getModels()
-					.get("config.fileRequirements", ModelTypes.Collection.forType(Pattern.class)).get(ui.getModels());
+					.get("config.excludedFileNames", ModelTypes.Collection.forType(Pattern.class)).get(ui.getModels());
 			theMinSize = doc.getHead().getModels().get("config.minSize", ModelTypes.Value.forType(double.class)).get(ui.getModels())
 					.map(d -> Math.round(d));
 			theMaxSize = doc.getHead().getModels().get("config.maxSize", ModelTypes.Value.forType(double.class)).get(ui.getModels())
@@ -753,6 +753,8 @@ public class QuickSearcher {
 	}
 
 	public static String renderTextResult(TextResult result) {
+	    if(result==null)
+	        return null;
 		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
 			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
 			if (result.lineNumber > 3) {
