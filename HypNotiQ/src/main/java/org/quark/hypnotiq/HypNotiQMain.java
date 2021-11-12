@@ -93,9 +93,9 @@ import org.quark.hypnotiq.entities.Subject;
 /** A note-taking app that facilitates very flexible, very persistent notifications */
 public class HypNotiQMain extends JPanel {
 	private static final SpinnerFormat<Instant> FUTURE_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
-			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.FUTURE));
+			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.Future));
 	private static final SpinnerFormat<Instant> PAST_DATE_FORMAT = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
-			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.PAST));
+			opts -> opts.withMaxResolution(TimeUtils.DateElementType.Second).withEvaluationType(TimeUtils.RelativeTimeEvaluation.Past));
 	private static final Pattern SUBJECT_PATTERN = Pattern.compile("\\#"//
 			+ "[a-zA-Z_\\./0-9]{2,}");
 	private static final Pattern ALL_NUMBERS = Pattern.compile("\\d*");
