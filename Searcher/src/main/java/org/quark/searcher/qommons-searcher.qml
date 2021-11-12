@@ -5,7 +5,8 @@
 	uses:base="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-base.qtd"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
-	 x="config.x" y="config.y" width="config.width" height="config.height">
+	x="config.x" y="config.y" width="config.width" height="config.height"
+	close-action="exit" >
 	<head>
 		<imports>
 			<import>org.quark.searcher.QuickSearcher</import>
@@ -30,7 +31,7 @@
 				<format name="fileFormat" type="file" file-source="files" working-dir="ext.workingDir" />
 				<format name="patternFormat" type="regex-format" />
 				<format name="byteFormat" type="double" sig-digs="4" unit="b" metric-prefixes-p2="true" />
-				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="PAST" />
+				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="Past" />
 				<simple-config-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" default="Maybe" />
 
 				<value name="x" type="int" />
@@ -119,21 +120,21 @@
 					</column>
 					<column name="Case" value="PatternConfig::isCaseSensitive">
 						<edit type="modify-row-value" function="PatternConfig::setCaseSensitive">
-							<text-field />
+							<check-box />
 						</edit>
 					</column>
 				</table>
 				<spacer length="3" />
 				<label fill="true">----File Metadata----</label>
-				<text-field field-name="Max Archive Depth:" value="config.zipLevel" disable-with="app.configurable" />
-				<!--<radio-buttons field-name="Directory:" value="config.fileRequirements.observe(Directory)"
-					values="org.quark.searcher.FileAttributeRequirement.values" disable-with="app.configurable" />
+				<text-field field-name="Max Archive Depth:" value="config.zipLevel" disable-with="app.configurable" columns="8" />
+				<radio-buttons field-name="Directory:" value="config.fileRequirements.observe(Directory)"
+					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
 				<radio-buttons field-name="Readable:" value="config.fileRequirements.observe(Readable)"
-					values="org.quark.searcher.FileAttributeRequirement.values" disable-with="app.configurable" />
+					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
 				<radio-buttons field-name="Writable:" value="config.fileRequirements.observe(Writable)"
-					values="org.quark.searcher.FileAttributeRequirement.values" disable-with="app.configurable" />
+					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
 				<radio-buttons field-name="Hidden:" value="config.fileRequirements.observe(Hidden)"
-					values="org.quark.searcher.FileAttributeRequirement.values" disable-with="app.configurable" />-->
+					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
 				<box field-name="Size:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.minSize" format="config.byteFormat" disable-with="app.configurable" />
 					<label>...</label>

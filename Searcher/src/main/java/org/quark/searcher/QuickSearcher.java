@@ -186,7 +186,9 @@ public class QuickSearcher {
 		theResults = SettableValue.build(SearchResultNode.class).safe(false).build();
 		theStatus = SettableValue.build(SearchStatus.class).safe(false).withValue(SearchStatus.Idle).build();
 		theStatusMessage = SettableValue.build(String.class).safe(false).withValue("Ready to search").build();
-		ObservableModelSet.ExternalModelSet extModels = ObservableModelSet.buildExternal()//
+		ObservableModelSet.ExternalModelSet extModels;
+		try {
+			extModels = ObservableModelSet.buildExternal()//
 				.with("workingDir", ModelTypes.Value.forType(String.class),
 						ObservableModelQonfigParser.literal(workingDir, "\"" + workingDir + "\""))//
 				.with("resultRoot", ModelTypes.Value.forType(SearchResultNode.class), theResults)//
@@ -198,6 +200,9 @@ public class QuickSearcher {
 				}).disableWith(//
 						theStatus.map(status -> status == SearchStatus.Canceling ? "Canceling..please wait" : null)))//
 				.build();
+		} catch (QonfigInterpretationException e) {
+			throw new IllegalStateException("Bad application configuration", e);
+		}
 		
 		theStatusUpdateHandle = QommonsTimer.getCommonInstance().build(this::updateStatus, Duration.ofMillis(100), false).onEDT();
 		updateStatus();
@@ -330,7 +335,7 @@ public class QuickSearcher {
 		if (filePattern == null || fileMatcher != null) {
 			boolean matches = true;
 			for (FileBooleanAttribute attr : FileBooleanAttribute.values()) {
-				if (!booleanAtts.get(attr).matches(file.get(attr))) {
+				if (!booleanAtts.getOrDefault(attr, FileAttributeRequirement.Maybe).matches(file.get(attr))) {
 					matches = false;
 					break;
 				}
@@ -753,8 +758,9 @@ public class QuickSearcher {
 	}
 
 	public static String renderTextResult(TextResult result) {
-	    if(result==null)
-	        return null;
+	    if(result==null) {
+			return null;
+		}
 		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
 			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
 			if (result.lineNumber > 3) {
