@@ -94,22 +94,28 @@
 	<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
 		<split orientation="horizontal" split-position="${config.mainSplitDiv}">
 			<field-panel>
-				<!--<file-field field-name="Search In:" value="config.searchBase" format="app.fileFormat" disable-with="app.configurable" fill="true" />-->
+				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Search In:" fill="true">
+					<text-field value="config.searchBase" format="config.fileFormat" disable-with="app.configurable" />
+					<file-button open="true" value="config.searchBase" disable-with="app.configurable" />
+				</box>
 				<spacer length="3" />
 				<label fill="true">----File Name----</label>
 				<box field-name="File Pattern:" layout="border" fill="true">
 					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable" />
-					<!--<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable">Case:</check-box>-->
+					<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable">Case:</check-box>
 				</box>
-				<!--<file-field field-name="Test File:" value="junk.testFilePath" format="junk.fileNamePatternFormat" fill="true" />-->
-				<!--<check-box value="config.excludedFileNames" field-name="Multiple Text Matches:" disable-with="app.configurable" />-->
+				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Test File:" fill="true">
+					<text-field value="junk.testFilePath" format="junk.fileNamePatternFormat" disable-with="app.configurable" />
+					<file-button open="true" value="junk.testFilePath" disable-with="app.configurable" />
+				</box>
 				<spacer length="3" />
 				<label fill="true">----File Content----</label>
 				<box field-name="Text Pattern:" layout="border" fill="true">
 					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable" />
-					<!--<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable">Case:</check-box>-->
+					<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable">Case:</check-box>
 				</box>
 				<text-field field-name="Test Content:" value="junk.testFileContent" format="junk.fileContentPatternFormat" fill="true" />
+				<check-box value="config.multiContentMatches" field-name="Multiple Text Matches:" disable-with="app.configurable" />
 				<spacer length="3" />
 				<label fill="true">Excluded File Names</label>
 				<table rows="config.excludedFileNames" fill="true">
