@@ -3,7 +3,7 @@
 <quick
 	uses:swing="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-swing.qtd"
 	uses:base="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-base.qtd"
-	with-extension="swing:quick,window"
+	with-extension="swing:quick,window,quick-debug"
 	look-and-feel="system" title="Qommons Searcher"
 	x="config.x" y="config.y" width="config.width" height="config.height"
 	close-action="exit" >
