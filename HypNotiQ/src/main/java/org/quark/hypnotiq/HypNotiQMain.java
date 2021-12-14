@@ -14,12 +14,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -506,9 +504,9 @@ public class HypNotiQMain extends JPanel {
 
 			if (nextAlert != null) {
 				if (!Objects.equals(theNextEvent, nextAlert)) {
-					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
-					System.out.println("Next alert at " + format.format(Date.from(nextAlert)) + " ("
-							+ QommonsUtils.printTimeLength(nextAlert.toEpochMilli() - System.currentTimeMillis()) + ")");
+					// SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+					// System.out.println("Next alert at " + format.format(Date.from(nextAlert)) + " ("
+					// + QommonsUtils.printTimeLength(nextAlert.toEpochMilli() - System.currentTimeMillis()) + ")");
 					theNextEvent = nextAlert;
 				}
 				if (TimeUtils.between(now, nextAlert).compareTo(MAX_SLEEP) > 0) {
@@ -517,7 +515,7 @@ public class HypNotiQMain extends JPanel {
 					theAlertTask.runNextIn(MAX_SLEEP);
 				}
 			} else {
-				System.out.println("No next alert");
+				// System.out.println("No next alert");
 				theAlertTask.setActive(false);
 			}
 		} finally {
