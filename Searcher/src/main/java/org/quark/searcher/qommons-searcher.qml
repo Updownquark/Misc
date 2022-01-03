@@ -3,10 +3,10 @@
 <quick
 	uses:swing="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-swing.qtd"
 	uses:base="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-base.qtd"
-	with-extension="swing:quick,window,quick-debug"
+	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
 	x="config.x" y="config.y" width="config.width" height="config.height"
-	close-action="exit" >
+	close-action="exit">
 	<head>
 		<imports>
 			<import>org.quark.searcher.QuickSearcher</import>
@@ -112,19 +112,19 @@
 				<label fill="true">----File Content----</label>
 				<box field-name="Text Pattern:" layout="border" fill="true">
 					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable" />
-					<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable">Case:</check-box>
+					<check-box region="east" value="config.fileTextCaseSensitive" disable-with="app.configurable">Case:</check-box>
 				</box>
 				<text-field field-name="Test Content:" value="junk.testFileContent" format="junk.fileContentPatternFormat" fill="true" />
 				<check-box value="config.multiContentMatches" field-name="Multiple Text Matches:" disable-with="app.configurable" />
 				<spacer length="3" />
 				<label fill="true">Excluded File Names</label>
-				<table rows="config.excludedFileNames" fill="true">
-					<column name="Pattern" value="PatternConfig::getPattern" format="config.patternFormat">
+				<table rows="config.excludedFileNames" fill="true" value-name="row" column-value-name="col">
+					<column name="Pattern" value="row.getPattern()" format="config.patternFormat">
 						<edit type="modify-row-value" function="PatternConfig::setPattern">
 							<text-field />
 						</edit>
 					</column>
-					<column name="Case" value="PatternConfig::isCaseSensitive">
+					<column name="Case" value="row.isCaseSensitive()">
 						<edit type="modify-row-value" function="PatternConfig::setCaseSensitive">
 							<check-box />
 						</edit>
@@ -133,13 +133,13 @@
 				<spacer length="3" />
 				<label fill="true">----File Metadata----</label>
 				<text-field field-name="Max Archive Depth:" value="config.zipLevel" disable-with="app.configurable" columns="8" />
-				<radio-buttons field-name="Directory:" value="config.fileRequirements.observe(Directory)"
+				<radio-buttons field-name="Directory:" render-value-name="type" value="config.fileRequirements.observe(Directory)"
 					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
-				<radio-buttons field-name="Readable:" value="config.fileRequirements.observe(Readable)"
+				<radio-buttons field-name="Readable:" render-value-name="type" value="config.fileRequirements.observe(Readable)"
 					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
-				<radio-buttons field-name="Writable:" value="config.fileRequirements.observe(Writable)"
+				<radio-buttons field-name="Writable:" render-value-name="type" value="config.fileRequirements.observe(Writable)"
 					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
-				<radio-buttons field-name="Hidden:" value="config.fileRequirements.observe(Hidden)"
+				<radio-buttons field-name="Hidden:" render-value-name="type" value="config.fileRequirements.observe(Hidden)"
 					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable" />
 				<box field-name="Size:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.minSize" format="config.byteFormat" disable-with="app.configurable" />
@@ -156,15 +156,15 @@
 				</box>
 			</field-panel>
 			<split orientation="vertical" split-position="${config.rightSplitDiv}">
-				<tree root="ext.resultRoot" children="QuickSearcher.SearchResultNode::getChildren"
-					parent="QuickSearcher.SearchResultNode::getParent" selection="app.selectedResult">
+				<tree root="ext.resultRoot" value-name="node" children="node.getChildren()"
+					parent="node.getParent()" selection="app.selectedResult">
 				</tree>
 				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
-					<table rows="app.textMatches" selection="app.selectedTextMatch">
-						<column name="Value" value="QuickSearcher.TextResult::getValue" />
-						<column name="Pos" value="QuickSearcher.TextResult::getPosition" />
-						<column name="Line" value="QuickSearcher.TextResult::getLineNumber" />
-						<column name="Col" value="QuickSearcher.TextResult::getColumnNumber" />
+					<table rows="app.textMatches" selection="app.selectedTextMatch" value-name="row" column-value-name="col">
+						<column name="Value" value="row.getValue()" />
+						<column name="Pos" value="row.getPosition()" />
+						<column name="Line" value="row.getLineNumber()" />
+						<column name="Col" value="row.getColumnNumber()" />
 					</table>
 					<text-area rows="10" value="app.selectedText" html="true" editable="false" />
 				</box>
