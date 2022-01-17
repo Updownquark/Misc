@@ -60,8 +60,8 @@ public class QuickSearcher {
 			children = ObservableSortedSet
 					.build(SearchResultNode.class,
 							(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true))
-					.safe(false).build();
-			textResults = ObservableCollection.build(TextResult.class).safe(false).build();
+					.build();
+			textResults = ObservableCollection.build(TextResult.class).build();
 		}
 
 		SearchResultNode getChild(BetterFile child) {
@@ -183,9 +183,9 @@ public class QuickSearcher {
 	private boolean isCanceling;
 
 	public QuickSearcher(String workingDir) {
-		theResults = SettableValue.build(SearchResultNode.class).safe(false).build();
-		theStatus = SettableValue.build(SearchStatus.class).safe(false).withValue(SearchStatus.Idle).build();
-		theStatusMessage = SettableValue.build(String.class).safe(false).withValue("Ready to search").build();
+		theResults = SettableValue.build(SearchResultNode.class).build();
+		theStatus = SettableValue.build(SearchStatus.class).withValue(SearchStatus.Idle).build();
+		theStatusMessage = SettableValue.build(String.class).withValue("Ready to search").build();
 		ObservableModelSet.ExternalModelSet extModels;
 		try {
 			extModels = ObservableModelSet.buildExternal()
