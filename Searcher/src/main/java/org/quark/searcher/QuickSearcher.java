@@ -42,7 +42,7 @@ import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.threading.QommonsTimer;
 
 public class QuickSearcher {
-	public static final double DEFAULT_MAX_SIZE = 1024L * 1024 * 1024 * 1024 * 1024;
+	public static final double DEFAULT_MAX_SIZE = 1024L * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
 
 	public static class SearchResultNode {
 		final SearchResultNode parent;
@@ -250,7 +250,7 @@ public class QuickSearcher {
 			theSelectedResult = doc.getHead().getModels().get("app.selectedResult", ModelTypes.Value.forType(SearchResultNode.class))
 					.get(ui.getModels());
 			ui.createFrame().setVisible(true);
-		} catch (IllegalArgumentException | QonfigInterpretationException | IOException | QonfigParseException e) {
+		} catch (IOException | QonfigParseException | QonfigInterpretationException | IllegalArgumentException e) {
 			throw new IllegalStateException(e);
 		}
 	}

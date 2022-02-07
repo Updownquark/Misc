@@ -591,6 +591,9 @@ public class SearcherUi extends JPanel {
 	}
 
 	String renderTextResult(TextResult result) {
+		if (result == null) {
+			return null;
+		}
 		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
 			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
 			if (result.lineNumber > 3) {
