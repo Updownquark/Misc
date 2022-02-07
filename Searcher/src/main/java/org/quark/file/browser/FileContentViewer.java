@@ -57,19 +57,19 @@ public class FileContentViewer extends JPanel {
 
 	public FileContentViewer(ObservableValue<ObservableFile> file) {
 		theFile = file;
-		theStart = SettableValue.build(long.class).safe(false).withValue(0L).build()//
+		theStart = SettableValue.build(long.class).withValue(0L).build()//
 				.filterAccept(start -> start < 0 ? "Negative position not acceptable" : null);
-		theEnd = SettableValue.build(long.class).safe(false).withValue(0L).build();
-		theFileSize = SettableValue.build(long.class).safe(false).withValue(0L).build();
-		canScrollBack = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-		canScrollForward = SettableValue.build(boolean.class).safe(false).withValue(true).build();
-		theViewMode = SettableValue.build(String.class).safe(false).withValue("Binary").build();
-		theViewText = SettableValue.build(String.class).safe(false).withValue("Binary").build();
-		isReading = SettableValue.build(boolean.class).safe(false).withValue(false).build();
+		theEnd = SettableValue.build(long.class).withValue(0L).build();
+		theFileSize = SettableValue.build(long.class).withValue(0L).build();
+		canScrollBack = SettableValue.build(boolean.class).withValue(false).build();
+		canScrollForward = SettableValue.build(boolean.class).withValue(true).build();
+		theViewMode = SettableValue.build(String.class).withValue("Binary").build();
+		theViewText = SettableValue.build(String.class).withValue("Binary").build();
+		isReading = SettableValue.build(boolean.class).withValue(false).build();
 		theTextBuffer = new StringBuilder();
 		theScrollPositions = new LinkedList<>();
-		isSearching = SettableValue.build(String.class).safe(false).withValue(null).build();
-		theSearch = SettableValue.build(String.class).safe(false).withValue("").build().disableWith(isSearching);
+		isSearching = SettableValue.build(String.class).withValue(null).build();
+		theSearch = SettableValue.build(String.class).withValue("").build().disableWith(isSearching);
 
 		ObservableValue<String> reading = isReading.map(r -> r ? "Reading Data" : null);
 		PanelPopulation.populateVPanel(this, null)//

@@ -67,7 +67,7 @@ public class BetterFileBrowser extends JPanel {
 
 	private void initComponents() {
 		// Table, up, file path
-		SettableValue<ObservableFile> selectedFile = SettableValue.build(ObservableFile.class).safe(false).build();
+		SettableValue<ObservableFile> selectedFile = SettableValue.build(ObservableFile.class).build();
 		PanelPopulation.populateVPanel(this, null)//
 				.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), p -> {
 					p.fill().addTextField(null, theFile, new ObservableFile.FileFormat(theDataSource, theWorkingDir, true),

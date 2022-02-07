@@ -123,12 +123,12 @@ public class HypNotiQMain extends JPanel {
 	private final List<PanelPopulation.TabEditor<?>> theEditingSubjectTabs;
 	private final List<PanelPopulation.TabEditor<?>> theEditingNoteTabs;
 
-	private final SettableValue<Subject> theSelectedSubject = SettableValue.build(Subject.class).safe(false).build();
-	private final SettableValue<Note> theSelectedNote = SettableValue.build(Note.class).safe(false).build();
-	private final SettableValue<ActiveEvent> theSelectedEvent = SettableValue.build(ActiveEvent.class).safe(false).build();
-	private final SimpleObservable<Void> theSubjectSelection = SimpleObservable.build().safe(false).build();
-	private final SimpleObservable<Void> theNoteSelection = SimpleObservable.build().safe(false).build();
-	private final SimpleObservable<Void> theEventsSelection = SimpleObservable.build().safe(false).build();
+	private final SettableValue<Subject> theSelectedSubject = SettableValue.build(Subject.class).build();
+	private final SettableValue<Note> theSelectedNote = SettableValue.build(Note.class).build();
+	private final SettableValue<ActiveEvent> theSelectedEvent = SettableValue.build(ActiveEvent.class).build();
+	private final SimpleObservable<Void> theSubjectSelection = SimpleObservable.build().build();
+	private final SimpleObservable<Void> theNoteSelection = SimpleObservable.build().build();
+	private final SimpleObservable<Void> theEventsSelection = SimpleObservable.build().build();
 
 	private PanelPopulation.TabPaneEditor<?, ?> theSubjectTabs;
 	private PanelPopulation.TabPaneEditor<?, ?> theNoteTabs;
@@ -151,7 +151,7 @@ public class HypNotiQMain extends JPanel {
 		theNotes = notes;
 		theSubjectByName = theSubjects.getValues().reverse().flow().groupBy(String.class, s -> s.getName().toLowerCase(), (__, s) -> s)
 				.gather().singleMap(true);
-		theEvents = ObservableCollection.build(ActiveEvent.class).safe(false).build();
+		theEvents = ObservableCollection.build(ActiveEvent.class).build();
 		theNotifications = theEvents.flow()//
 				.flatMap(ActiveNotification.class, LambdaUtils.printableFn(event -> event.getNotifications().flow(), "notifications", null))//
 				.collect();
@@ -161,8 +161,8 @@ public class HypNotiQMain extends JPanel {
 		theActiveNotifications = theNotifications.flow().filter(n -> n.getNextNotification() == null ? "Not Active" : null)
 				.sorted(ActiveNotification::compareTo).collect();
 		theEventsById = theEvents.flow().groupBy(long.class, n -> n.getEvent().getNote().getId(), (id, n) -> n).gather();
-		theEditingSubjects = ObservableCollection.build(Subject.class).safe(false).build();
-		theEditingNotes = ObservableCollection.build(Note.class).safe(false).build();
+		theEditingSubjects = ObservableCollection.build(Subject.class).build();
+		theEditingNotes = ObservableCollection.build(Note.class).build();
 		theEditingSubjectTabs = new ArrayList<>();
 		theEditingNoteTabs = new ArrayList<>();
 
@@ -547,7 +547,9 @@ public class HypNotiQMain extends JPanel {
 				theSubjectTabs.withVTab(evt.getNewValue().getId(), subjectPanel -> populateSubjectEditor(subjectPanel, evt.getNewValue()),
 						subjectTab -> {
 							theEditingSubjectTabs.add(evt.getIndex(), subjectTab);
-							subjectTab.setName(SettableValue.build(String.class).safe(false).withValue(evt.getNewValue().getName()).build())
+							subjectTab
+									.setName(SettableValue.build(String.class).withValue(evt.getNewValue().getName())
+											.build())
 									.setRemovable(true).onRemove(__ -> {
 										theEditingSubjects.mutableElement(evt.getElementId()).remove();
 									});
@@ -566,7 +568,7 @@ public class HypNotiQMain extends JPanel {
 			case add:
 				theNoteTabs.withVTab(evt.getNewValue().getId(), notePanel -> populateNoteEditor(notePanel, evt.getNewValue()), noteTab -> {
 					theEditingNoteTabs.add(evt.getIndex(), noteTab);
-					noteTab.setName(SettableValue.build(String.class).safe(false).withValue(evt.getNewValue().getName()).build())
+					noteTab.setName(SettableValue.build(String.class).withValue(evt.getNewValue().getName()).build())
 							.setRemovable(true).onRemove(__ -> {
 								theEditingNotes.mutableElement(evt.getElementId()).remove();
 							});
@@ -615,7 +617,7 @@ public class HypNotiQMain extends JPanel {
 	}
 
 	private void populateSubjectsTab(PanelPopulator<?, ?> subjectsTab) {
-		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class).safe(false)
+		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class)
 				.withValue(TableContentControl.DEFAULT).build();
 		subjectsTab//
 				.addTextField(null, filter, TableContentControl.FORMAT,
@@ -654,7 +656,7 @@ public class HypNotiQMain extends JPanel {
 	}
 
 	private void populateNotesTab(PanelPopulator<?, ?> notesTab) {
-		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class).safe(false)
+		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class)
 				.withValue(TableContentControl.DEFAULT).build();
 		notesTab//
 				.addTextField(null, filter, TableContentControl.FORMAT,
@@ -708,7 +710,7 @@ public class HypNotiQMain extends JPanel {
 	}
 
 	private void populateNotificationsTab(PanelPopulator<?, ?> notificationsTab) {
-		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class).safe(false)
+		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class)
 				.withValue(TableContentControl.DEFAULT).build();
 		notificationsTab//
 				.addTextField(null, filter, TableContentControl.FORMAT,
@@ -916,9 +918,9 @@ public class HypNotiQMain extends JPanel {
 								if (editor != null) {
 									editor.cancelCellEditing();
 								}
-								SettableValue<Duration> durationValue = SettableValue.build(Duration.class).safe(false)//
+								SettableValue<Duration> durationValue = SettableValue.build(Duration.class)//
 										.withValue(Duration.ofDays(1)).build();
-								SimpleObservable<Void> temp = SimpleObservable.build().safe(false).build();
+								SimpleObservable<Void> temp = SimpleObservable.build().build();
 								ObservableTextField<Duration> durationField = new ObservableTextField<>(durationValue,
 										SpinnerFormat.flexDuration(false), temp).setCommitOnType(true).setCommitAdjustmentImmediately(true);
 								if (JOptionPane.showConfirmDialog(container, durationField, "Select Snooze Duration",
@@ -940,9 +942,9 @@ public class HypNotiQMain extends JPanel {
 								defaultUntil.set(Calendar.MILLISECOND, 0);
 								defaultUntil.set(Calendar.SECOND, 0);
 								defaultUntil.set(Calendar.MINUTE, 0);
-								SettableValue<Instant> untilValue = SettableValue.build(Instant.class).safe(false)//
+								SettableValue<Instant> untilValue = SettableValue.build(Instant.class)//
 										.withValue(Instant.ofEpochMilli(defaultUntil.getTimeInMillis())).build();
-								SimpleObservable<Void> temp = SimpleObservable.build().safe(false).build();
+								SimpleObservable<Void> temp = SimpleObservable.build().build();
 								ObservableTextField<Instant> untilField = new ObservableTextField<>(untilValue, FUTURE_DATE_FORMAT, temp)
 										.setCommitOnType(true).setCommitAdjustmentImmediately(true);
 								if (JOptionPane.showConfirmDialog(container, untilField, "Select Snooze Time",
@@ -1050,7 +1052,7 @@ public class HypNotiQMain extends JPanel {
 			return -n1.getModified().compareTo(n2.getModified());
 		}).collect();
 
-		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class).safe(false)
+		SettableValue<TableContentControl> filter = SettableValue.build(TableContentControl.class)
 				.withValue(TableContentControl.DEFAULT).build();
 		panel//
 				.addTextField(null, filter, TableContentControl.FORMAT,
@@ -1304,7 +1306,7 @@ public class HypNotiQMain extends JPanel {
 				e.printStackTrace(System.out);
 			}
 		}))//
-				.withVisible(SettableValue.build(boolean.class).safe(false).withValue(false).build())// Not shown initially
+				.withVisible(SettableValue.build(boolean.class).withValue(false).build())// Not shown initially
 				.build((config, onBuilt) -> {
 					try {
 						new GitHubApiHelper("Updownquark", "Misc").withTagPattern("HypNotiQ-.*").checkForNewVersion(HypNotiQMain.class,
@@ -1315,7 +1317,7 @@ public class HypNotiQMain extends JPanel {
 									ObservableConfigParseSession session = new ObservableConfigParseSession();
 									ValueHolder<SyncValueSet<Subject>> subjects = new ValueHolder<>();
 									ValueHolder<SyncValueSet<Note>> notes = new ValueHolder<>();
-									SimpleObservable<Void> built = SimpleObservable.build().safe(false).build();
+									SimpleObservable<Void> built = SimpleObservable.build().build();
 									getSubjects(config, session, subjects, notes, built);
 									getNotes(config, session, subjects, notes, built);
 									built.onNext(null);
@@ -1360,7 +1362,7 @@ public class HypNotiQMain extends JPanel {
 
 		ActiveEvent(Event event) {
 			theEvent = event;
-			theNotifications = ObservableCollection.build(ActiveNotification.class).safe(false).build();
+			theNotifications = ObservableCollection.build(ActiveNotification.class).build();
 			update();
 		}
 

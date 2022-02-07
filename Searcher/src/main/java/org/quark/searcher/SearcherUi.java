@@ -99,8 +99,8 @@ public class SearcherUi extends JPanel {
 			children = ObservableSortedSet
 					.build(SearchResultNode.class,
 							(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true))
-					.safe(false).build();
-			textResults = ObservableCollection.build(TextResult.class).safe(false).build();
+					.build();
+			textResults = ObservableCollection.build(TextResult.class).build();
 		}
 
 		SearchResultNode getChild(BetterFile child) {
@@ -199,7 +199,7 @@ public class SearcherUi extends JPanel {
 		BetterFile workingDirFile = BetterFile.at(theFileSource, workingDir);
 		theFileFormat = new BetterFile.FileFormat(theFileSource, workingDirFile, false);
 		theTestFileFormat = new BetterFile.FileFormat(theFileSource, theFileFormat.getWorkingDir(), true);
-		theStatus = SettableValue.build(SearchStatus.class).safe(false).withValue(SearchStatus.Idle).build();
+		theStatus = SettableValue.build(SearchStatus.class).withValue(SearchStatus.Idle).build();
 		ObservableValue<String> disable = theStatus.map(st -> st == SearchStatus.Idle ? null : "Cannot be modified during a search");
 		theSearchBase = config.asValue(BetterFile.class).at("root").withFormat(theFileFormat, theFileFormat::getWorkingDir)
 				.buildValue(null).disableWith(disable);
@@ -272,22 +272,22 @@ public class SearcherUi extends JPanel {
 		// Doesn't seem like a good idea to remember these values in config.
 		// A user just popping up the app and doing a search could inadvertently be excluding files on these criteria
 		// just because they forgot to reset them.
-		theMinSize = SettableValue.build(long.class).safe(false).withValue(0L).build();
-		theMaxSize = SettableValue.build(long.class).safe(false).withValue(1024L * 1024 * 1024 * 1024 * 1024).build(); // 1 Petabyte
+		theMinSize = SettableValue.build(long.class).withValue(0L).build();
+		theMaxSize = SettableValue.build(long.class).withValue(1024L * 1024 * 1024 * 1024 * 1024).build(); // 1 Petabyte
 		theMaxSize.changes().act(evt -> {
 			System.out.println(evt);
 		});
 		Calendar cal = Calendar.getInstance();
 		cal.set(cal.get(Calendar.YEAR) + 100, 1, 1, 0, 0, 0);
-		theMaxTime = SettableValue.build(long.class).safe(false).withValue(cal.getTimeInMillis()).build();
+		theMaxTime = SettableValue.build(long.class).withValue(cal.getTimeInMillis()).build();
 		cal.set(1900, 1, 1, 0, 0);
-		theMinTime = SettableValue.build(long.class).safe(false).withValue(cal.getTimeInMillis()).build();
+		theMinTime = SettableValue.build(long.class).withValue(cal.getTimeInMillis()).build();
 
-		theResults = SettableValue.build(SearchResultNode.class).safe(false).build();
-		theSelectedResult = SettableValue.build(SearchResultNode.class).safe(false).build();
+		theResults = SettableValue.build(SearchResultNode.class).build();
+		theSelectedResult = SettableValue.build(SearchResultNode.class).build();
 		theResults.noInitChanges().act(evt -> theSelectedResult.set(null, evt));
-		theSelectedTextResult = SettableValue.build(TextResult.class).safe(false).build();
-		theStatusMessage = SettableValue.build(String.class).safe(false).build();
+		theSelectedTextResult = SettableValue.build(TextResult.class).build();
+		theStatusMessage = SettableValue.build(String.class).build();
 		theStatusMessage.set(getIdleStatus(), null);
 		theSelectedRenderedText = theSelectedTextResult.map(tr -> tr == null ? "" : renderTextResult(tr));
 
