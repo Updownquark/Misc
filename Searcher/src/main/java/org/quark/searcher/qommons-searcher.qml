@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<quick
+<quick-debug
 	uses:swing="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-swing.qtd"
 	uses:base="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-base.qtd"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
-	x="config.x" y="config.y" width="config.width" height="config.height"
-	close-action="exit">
+	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit"
+	debug-visible="true">
 	<head>
 		<imports>
 			<import>org.quark.searcher.QuickSearcher</import>
@@ -118,16 +118,16 @@
 				<check-box value="config.multiContentMatches" field-name="Multiple Text Matches:" disable-with="app.configurable" />
 				<spacer length="3" />
 				<label fill="true">Excluded File Names</label>
-				<table rows="config.excludedFileNames" fill="true" value-name="row" column-value-name="col">
-					<column name="Pattern" value="row.getPattern()" format="config.patternFormat">
-						<edit type="modify-row-value" function="PatternConfig::setPattern">
-							<text-field />
-						</edit>
+				<table rows="config.excludedFileNames" fill="true" value-name="row" render-value-name="col">
+					<column name="Pattern" value="row.getPattern()">
+						<column-edit type="modify-row-value" function="PatternConfig::setPattern">
+							<text-field format="config.patternFormat" />
+						</column-edit>
 					</column>
 					<column name="Case" value="row.isCaseSensitive()">
-						<edit type="modify-row-value" function="PatternConfig::setCaseSensitive">
+						<column-edit type="modify-row-value" function="PatternConfig::setCaseSensitive">
 							<check-box />
-						</edit>
+						</column-edit>
 					</column>
 				</table>
 				<spacer length="3" />
@@ -156,11 +156,12 @@
 				</box>
 			</field-panel>
 			<split orientation="vertical" split-position="${config.rightSplitDiv}">
-				<tree root="ext.resultRoot" value-name="node" children="node.getChildren()"
-					parent="node.getParent()" selection="app.selectedResult">
+				<tree root="ext.resultRoot" value-name="path" render-value-name="node" children="node.getChildren()"
+					selection="app.selectedResult">
+					<column name="Tree" format="node.getFile().getName()" />
 				</tree>
 				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
-					<table rows="app.textMatches" selection="app.selectedTextMatch" value-name="row" column-value-name="col">
+					<table rows="app.textMatches" selection="app.selectedTextMatch" value-name="row" render-value-name="col">
 						<column name="Value" value="row.getValue()" />
 						<column name="Pos" value="row.getPosition()" />
 						<column name="Line" value="row.getLineNumber()" />
@@ -172,4 +173,4 @@
 		</split>
 		<label value="ext.statusText" />
 	</box>
-</quick>
+</quick-debug>

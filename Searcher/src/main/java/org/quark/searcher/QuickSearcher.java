@@ -84,6 +84,10 @@ public class QuickSearcher {
 			}
 		}
 
+		public BetterFile getFile() {
+			return file;
+		}
+
 		public SearchResultNode getParent() {
 			return parent;
 		}
@@ -156,7 +160,7 @@ public class QuickSearcher {
 
 	public static void main(String... args) {
 		String workingDir = System.getProperty("user.dir");
-		new QuickSearcher(workingDir);
+		EventQueue.invokeLater(() -> new QuickSearcher(workingDir));
 	}
 
 	private final SettableValue<SearchResultNode> theResults;
@@ -295,7 +299,7 @@ public class QuickSearcher {
 				} else {
 					theStatusMessage.set("Completed search of "//
 							+ searched[0] + " file" + (searched[0] == 1 ? "" : "s") + " and "//
-							+ searched[1] + " director" + (searched[1] == 1 ? "y" : "ies") + " and "//
+							+ searched[1] + " director" + (searched[1] == 1 ? "y" : "ies")//
 							+ " in " + QommonsUtils.printTimeLength(end - start), null);
 				}
 			});

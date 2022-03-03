@@ -14,13 +14,15 @@ class FileContentSeq implements CharSequence {
 	private int theFirstLength;
 	private int theSecondLength;
 
-	FileContentSeq(int testLength) {
-		theFirstSequence = new char[testLength];
-		theSecondSequence = new char[testLength];
+	FileContentSeq(int bufferLength) {
+		theFirstSequence = new char[bufferLength];
+		theSecondSequence = new char[bufferLength];
+		clear();
 	}
 
 	FileContentSeq clear() {
-		thePosition = theLine = theColumn = theFirstLength = theSecondLength = 0;
+		thePosition = theFirstLength = theSecondLength = 0;
+		theLine = theColumn = 1;
 		return this;
 	}
 
@@ -43,159 +45,114 @@ class FileContentSeq implements CharSequence {
 	boolean advance(Reader reader, int length) throws IOException {
 		if (length == 0) {
 			return true;
-		}
-		if (length < 0 || length >= theFirstLength) {
-			// Discard first sequence and as much as we need to of the second sequence
-			// Put the remainder of the second sequence into the first, then fill up both sequences
-			thePosition += theFirstLength;
-			int lastLine = 0;
-			int colPad = 0;
-			for (int i = 0; i < theFirstLength; i++) {
-				switch (theFirstSequence[i]) {
-				case '\n':
-					lastLine = i;
-					theLine++;
-					theColumn = 0;
-					colPad = -1;
-					break;
-				case '\r':
-				case '\b':
-				case '\f':
-					colPad--;
-					break;
-				case '\t':
-					colPad += 3; // Use 4-character tabs for now
-					break;
-				}
-			}
-			theColumn += theFirstLength - lastLine + colPad;
-
-			int read;
-			if (theFirstLength == 0 || length > theFirstLength) {
-				if (length > 0) {
-					lastLine = 0;
-					colPad = 0;
-					for (int i = 0; i < length - theFirstLength; i++) {
-						switch (theSecondSequence[i]) {
-						case '\n':
-							lastLine = i;
-							theLine++;
-							theColumn = 0;
-							colPad = -1;
-							break;
-						case '\r':
-						case '\b':
-						case '\f':
-							colPad--;
-							break;
-						case '\t':
-							colPad += 3; // Use 4-character tabs for now
-							break;
-						}
-					}
-					theColumn += length - theFirstLength - lastLine + colPad;
-				}
-
-				if (length == theFirstLength + theSecondLength) {
-					theFirstLength = 0;
-				} else if (length > 0) {
-					int newLen = theFirstLength + theSecondLength - length;
-					System.arraycopy(theSecondSequence, length - theFirstLength, theFirstSequence, 0, newLen);
-					theFirstLength = newLen;
-				} else {
-					char[] temp = theFirstSequence;
-					theFirstSequence = theSecondSequence;
-					theSecondSequence = temp;
-					theFirstLength = theSecondLength;
-				}
-				theSecondLength = 0;
-				read = reader.read(theFirstSequence, theFirstLength, theFirstSequence.length - theFirstLength);
-				if (read < 0) {
-					return false;
-				}
-				while (read >= 0 && theFirstLength + read < theFirstSequence.length) {
-					theFirstLength += read;
-					read = reader.read(theFirstSequence, theFirstLength, theFirstSequence.length - theFirstLength);
-				}
-				if (read > 0) {
-					theFirstLength += read;
-					read = reader.read(theSecondSequence, 0, theSecondSequence.length);
-					while (read >= 0 && theSecondLength + read < theSecondSequence.length) {
-						theSecondLength += read;
-						read = reader.read(theSecondSequence, theSecondLength, theSecondSequence.length - theSecondLength);
-					}
-					if (read > 0) {
-						theSecondLength += read;
-					}
-				}
-			} else {
-				char[] temp = theFirstSequence;
-				theFirstSequence = theSecondSequence;
-				theSecondSequence = temp;
-				theFirstLength = theSecondLength;
-				theSecondLength = 0;
-				read = reader.read(theSecondSequence);
-				if (read < 0) {
-					return false;
-				}
-				while (read >= 0 && theSecondLength + read < theSecondSequence.length) {
-					theSecondLength += read;
-					read = reader.read(theSecondSequence, theSecondLength, theSecondSequence.length - theSecondLength);
-				}
-				if (read > 0) {
-					theSecondLength=read;
-				}
-			}
-			return true;
+		} else if (length < 0) {
+			roll();
+			roll();
+			return fill(reader);
 		} else {
-			// Discard the given amount of the first sequence, move the rest to the beginning of the array,
-			// append content from the second sequence to it till it's full, read into the second sequence
-			thePosition += length;
-			int lastLine = 0;
-			int colPad = 0;
-			for (int i = 0; i < length; i++) {
-				switch (theFirstSequence[i]) {
-				case '\n':
-					lastLine = i;
-					theLine++;
-					theColumn = 0;
-					colPad = -1;
-					break;
-				case '\r':
-				case '\b':
-				case '\f':
-					colPad--;
-					break;
-				case '\t':
-					colPad += 3; // Use 4-character tabs for now
+			boolean readAny = false;
+			while (length >= theFirstLength) {
+				length -= roll();
+				if (fill(reader)) {
+					readAny = true;
+				} else {
 					break;
 				}
 			}
-			theColumn += length - lastLine + colPad;
-
-			int firstRemain = theFirstLength - length;
-			System.arraycopy(theFirstSequence, length, theFirstSequence, 0, firstRemain);
-			if (theSecondLength > 0) {
-				int secondMoved = Math.min(theSecondLength, length);
-				System.arraycopy(theSecondSequence, 0, theFirstSequence, firstRemain, secondMoved);
-				theSecondLength -= secondMoved;
-				System.arraycopy(theSecondSequence, secondMoved, theSecondSequence, 0, theSecondLength);
-			} else {
-				theFirstLength = firstRemain;
+			if (length > 0) {
+				roll(length);
 			}
-			int read = reader.read(theSecondSequence, theSecondLength, theSecondSequence.length - theSecondLength);
-			if (read < 0) {
-				return false;
-			}
-			while (read >= 0 && theSecondLength + read < theSecondSequence.length) {
-				theSecondLength += read;
-				read = reader.read(theSecondSequence, theSecondLength, theSecondSequence.length - theSecondLength);
-			}
-			if (read > 0) {
-				theSecondLength += read;
-			}
-			return true;
+			return readAny;
 		}
+	}
+
+	private int roll() {
+		// Discard the first sequence and roll the second into it
+		int moved = theFirstLength;
+		thePosition += moved;
+		int lastLine = 0;
+		int colPad = 0;
+		for (int i = 0; i < moved; i++) {
+			switch (theFirstSequence[i]) {
+			case '\n':
+				lastLine = i;
+				theLine++;
+				theColumn = 1;
+				colPad = -1;
+				break;
+			case '\r':
+			case '\b':
+			case '\f':
+				colPad--;
+				break;
+			case '\t':
+				colPad += 3; // Use 4-character tabs for now
+				break;
+			}
+		}
+		theColumn += moved - lastLine + colPad;
+		theFirstLength = theSecondLength;
+		theSecondLength = 0;
+		char[] temp = theFirstSequence;
+		theFirstSequence = theSecondSequence;
+		theSecondSequence = temp;
+		return moved;
+	}
+
+	private void roll(int length) {
+		thePosition += length;
+		int lastLine = 0;
+		int colPad = 0;
+		for (int i = 0; i < length; i++) {
+			switch (theFirstSequence[i]) {
+			case '\n':
+				lastLine = i;
+				theLine++;
+				theColumn = 1;
+				colPad = -1;
+				break;
+			case '\r':
+			case '\b':
+			case '\f':
+				colPad--;
+				break;
+			case '\t':
+				colPad += 3; // Use 4-character tabs for now
+				break;
+			}
+		}
+		theColumn += length - lastLine + colPad;
+		theFirstLength -= length;
+		System.arraycopy(theFirstSequence, length, theFirstSequence, 0, theFirstLength);
+		if (theSecondLength > 0) {
+			if (theSecondLength > theFirstSequence.length - theFirstLength) {
+				int move = theFirstSequence.length - theFirstLength;
+				System.arraycopy(theSecondSequence, 0, theFirstSequence, theFirstLength, move);
+				theFirstLength += move;
+				System.arraycopy(theSecondSequence, move, theSecondSequence, 0, theSecondLength - move);
+				theSecondLength -= move;
+			} else {
+				System.arraycopy(theSecondSequence, 0, theFirstSequence, theFirstLength, theSecondLength);
+				theFirstLength += theSecondLength;
+				theSecondLength = 0;
+			}
+		}
+	}
+
+	private boolean fill(Reader reader) throws IOException {
+		int read = 0;
+		boolean readAny = false;
+		while (read >= 0 && theFirstLength < theFirstSequence.length) {
+			theFirstLength += read;
+			read = reader.read(theFirstSequence, theFirstLength, theFirstSequence.length - theFirstLength);
+			readAny |= read > 0;
+		}
+		while (read >= 0 && theSecondLength < theSecondSequence.length) {
+			theSecondLength += read;
+			read = reader.read(theSecondSequence, theSecondLength, theSecondSequence.length - theSecondLength);
+			readAny |= read > 0;
+		}
+		return readAny;
 	}
 
 	public void goToLine(Reader reader, long lineNumber) throws IOException {

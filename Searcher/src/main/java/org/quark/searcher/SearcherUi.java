@@ -41,7 +41,7 @@ import org.qommons.QommonsUtils;
 import org.qommons.QommonsUtils.NamedGroupCapture;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils.DateElementType;
-import org.qommons.TimeUtils.RelativeTimeEvaluation;
+import org.qommons.TimeUtils.RelativeInstantEvaluation;
 import org.qommons.collect.ElementId;
 import org.qommons.io.ArchiveEnabledFileSource;
 import org.qommons.io.BetterFile;
@@ -680,7 +680,7 @@ public class SearcherUi extends JPanel {
 
 	private void populateConfigPanel(PanelPopulation.PanelPopulator<?, ?> configPanel) {
 		SpinnerFormat<Instant> dateFormat = SpinnerFormat.flexDate(Instant::now, "EEE MMM dd, yyyy",
-				teo -> teo.withEvaluationType(RelativeTimeEvaluation.Past).withMaxResolution(DateElementType.Minute));
+				teo -> teo.withEvaluationType(RelativeInstantEvaluation.Past).withMaxResolution(DateElementType.Minute));
 		Format.SuperDoubleFormatBuilder sizeFormatBuilder = Format.doubleFormat(4).withUnit("b", true);
 		double k = 1024;
 		sizeFormatBuilder.withPrefix("k", k).withPrefix("M", k * k).withPrefix("G", k * k * k).withPrefix("T", k * k * k * k)//
@@ -836,8 +836,8 @@ public class SearcherUi extends JPanel {
 
 	private void populateResultFiles(PanelPopulation.PanelPopulator<?, ?> configPanel) {
 		configPanel.addTree(theResults, node -> node.children,
-				tree -> tree.fill().fillV().withSelection(theSelectedResult, r -> r.parent, true)//
-						.renderWith(node -> node.file.getName())//
+				tree -> tree.fill().fillV().withValueSelection(theSelectedResult, true)//
+						.withRender(render -> render.formatText(node -> node.file.getName()))//
 						.withLeafTest(node -> !node.file.isDirectory())//
 						.onClick(evt -> {
 							if (evt.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(evt) && Desktop.isDesktopSupported()) {
