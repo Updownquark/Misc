@@ -170,7 +170,9 @@ public class QuickSearcher {
 
 	private final ObservableValue<BetterFile> theSearchBase;
 	private final ObservableValue<Pattern> theFileNamePattern;
+	private final ObservableValue<Boolean> isFileNameCaseSensitive;
 	private final ObservableValue<Pattern> theFileContentPattern;
+	private final ObservableValue<Boolean> isFileContentCaseSensitive;
 	private final ObservableValue<Boolean> isSearchingMultipleContentMatches;
 	private final ObservableMap<FileBooleanAttribute, FileAttributeRequirement> theFileRequirements;
 	private final ObservableValue<Integer> theMaxFileMatchLength;
@@ -232,8 +234,12 @@ public class QuickSearcher {
 					.get(ui.getModels());
 			theFileNamePattern = doc.getHead().getModels().get("config.fileNamePattern", ModelTypes.Value.forType(Pattern.class))
 					.get(ui.getModels());
+			isFileNameCaseSensitive = doc.getHead().getModels().get("config.fileNameCaseSensitive", ModelTypes.Value.forType(boolean.class))
+					.get(ui.getModels());
 			theFileContentPattern = doc.getHead().getModels().get("config.fileTextPattern", ModelTypes.Value.forType(Pattern.class))
 					.get(ui.getModels());
+			isFileContentCaseSensitive = doc.getHead().getModels()
+					.get("config.fileTextCaseSensitive", ModelTypes.Value.forType(boolean.class)).get(ui.getModels());
 			isSearchingMultipleContentMatches = doc.getHead().getModels()
 					.get("config.multiContentMatches", ModelTypes.Value.forType(Boolean.class)).get(ui.getModels());
 			theFileRequirements = doc.getHead().getModels()
@@ -268,7 +274,13 @@ public class QuickSearcher {
 		isSearching=true;
 		BetterFile file = theSearchBase.get();
 		Pattern filePattern = theFileNamePattern.get();
+		if (filePattern != null && !isFileNameCaseSensitive.get()) {
+			filePattern=Pattern.compile(filePattern.pattern(), Pattern.CASE_INSENSITIVE);
+		}
 		Pattern contentPattern = theFileContentPattern.get();
+		if (contentPattern != null && !isFileContentCaseSensitive.get()) {
+			contentPattern=Pattern.compile(contentPattern.pattern(), Pattern.CASE_INSENSITIVE);
+		}
 		SearchResultNode rootResult = new SearchResultNode(null, file);
 		ObservableSwingUtils.onEQ(() -> {
 			theStatus.set(SearchStatus.Searching, null);

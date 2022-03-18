@@ -274,9 +274,6 @@ public class SearcherUi extends JPanel {
 		// just because they forgot to reset them.
 		theMinSize = SettableValue.build(long.class).withValue(0L).build();
 		theMaxSize = SettableValue.build(long.class).withValue(1024L * 1024 * 1024 * 1024 * 1024).build(); // 1 Petabyte
-		theMaxSize.changes().act(evt -> {
-			System.out.println(evt);
-		});
 		Calendar cal = Calendar.getInstance();
 		cal.set(cal.get(Calendar.YEAR) + 100, 1, 1, 0, 0, 0);
 		theMaxTime = SettableValue.build(long.class).withValue(cal.getTimeInMillis()).build();
@@ -871,10 +868,12 @@ public class SearcherUi extends JPanel {
 
 	public static void main(String[] args) {
 		String workingDir = System.getProperty("user.dir");
-		ObservableSwingUtils.buildUI()//
+		EventQueue.invokeLater(() -> {
+			ObservableSwingUtils.buildUI()//
 				.withConfig("qommons-search")//
 				.withTitle("Qommons Search")//
 				.systemLandF()//
 				.build(config -> new SearcherUi(config, workingDir));
+		});
 	}
 }
