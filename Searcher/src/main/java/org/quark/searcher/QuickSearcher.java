@@ -45,6 +45,8 @@ public class QuickSearcher {
 	public static final double DEFAULT_MAX_SIZE = 1024L * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
 
 	public static class SearchResultNode {
+		/** Just for debugging */
+		final int searchNumber;
 		final SearchResultNode parent;
 		ElementId parentChildId;
 		final BetterFile file;
@@ -54,7 +56,8 @@ public class QuickSearcher {
 		final ObservableSortedSet<SearchResultNode> children;
 		ObservableCollection<TextResult> textResults;
 
-		SearchResultNode(SearchResultNode parent, BetterFile file) {
+		SearchResultNode(int searchNumber, SearchResultNode parent, BetterFile file) {
+			this.searchNumber = searchNumber;
 			this.parent = parent;
 			this.file = file;
 			children = ObservableSortedSet
@@ -70,7 +73,7 @@ public class QuickSearcher {
 					return ch;
 				}
 			}
-			SearchResultNode node = new SearchResultNode(this, child);
+			SearchResultNode node = new SearchResultNode(searchNumber, this, child);
 			node.parentChildId = children.addElement(node, false).getElementId();
 			return node;
 		}
@@ -102,7 +105,7 @@ public class QuickSearcher {
 
 		@Override
 		public String toString() {
-			return file.toString();
+			return searchNumber + ": " + file.getName();
 		}
 	}
 
@@ -169,9 +172,9 @@ public class QuickSearcher {
 	private final List<Pattern> theDynamicExclusionPatterns;
 
 	private final ObservableValue<BetterFile> theSearchBase;
-	private final ObservableValue<Pattern> theFileNamePattern;
+	private final ObservableValue<String> theFileNamePattern;
 	private final ObservableValue<Boolean> isFileNameCaseSensitive;
-	private final ObservableValue<Pattern> theFileContentPattern;
+	private final ObservableValue<String> theFileContentPattern;
 	private final ObservableValue<Boolean> isFileContentCaseSensitive;
 	private final ObservableValue<Boolean> isSearchingMultipleContentMatches;
 	private final ObservableMap<FileBooleanAttribute, FileAttributeRequirement> theFileRequirements;
@@ -187,6 +190,7 @@ public class QuickSearcher {
 	private BetterFile theCurrentSearch;
 	private boolean isSearching;
 	private boolean isCanceling;
+	private int theSearchNumber;
 
 	public QuickSearcher(String workingDir) {
 		theResults = SettableValue.build(SearchResultNode.class).build();
@@ -194,7 +198,7 @@ public class QuickSearcher {
 		theStatusMessage = SettableValue.build(String.class).withValue("Ready to search").build();
 		ObservableModelSet.ExternalModelSet extModels;
 		try {
-			extModels = ObservableModelSet.buildExternal()
+			extModels = ObservableModelSet.buildExternal(ObservableModelSet.JAVA_NAME_CHECKER)
 					.withSubModel("ext", sub -> sub
 							.with("workingDir", ModelTypes.Value.forType(String.class),
 									ObservableModelQonfigParser.literal(workingDir, "\"" + workingDir + "\""))//
@@ -216,7 +220,7 @@ public class QuickSearcher {
 		
 		try {
 			URL searcherFile = QuickSearcher.class.getResource("qommons-searcher.qml");
-			QuickSwingParser.QuickDocument doc = new QuickSwingParser().configureInterpreter(QonfigInterpreter.build(//
+			QuickSwingParser.QuickDocument doc = new QuickSwingParser().configureInterpreter(QonfigInterpreter.build(getClass(), //
 					ObservableModelQonfigParser.TOOLKIT.get(), //
 					QuickSwingParser.BASE.get(), //
 					QuickSwingParser.SWING.get())//
@@ -232,11 +236,11 @@ public class QuickSearcher {
 			QuickUiDef ui = doc.createUI(extModels);
 			theSearchBase = doc.getHead().getModels().get("config.searchBase", ModelTypes.Value.forType(BetterFile.class))
 					.get(ui.getModels());
-			theFileNamePattern = doc.getHead().getModels().get("config.fileNamePattern", ModelTypes.Value.forType(Pattern.class))
+			theFileNamePattern = doc.getHead().getModels().get("config.fileNamePattern", ModelTypes.Value.forType(String.class))
 					.get(ui.getModels());
 			isFileNameCaseSensitive = doc.getHead().getModels().get("config.fileNameCaseSensitive", ModelTypes.Value.forType(boolean.class))
 					.get(ui.getModels());
-			theFileContentPattern = doc.getHead().getModels().get("config.fileTextPattern", ModelTypes.Value.forType(Pattern.class))
+			theFileContentPattern = doc.getHead().getModels().get("config.fileTextPattern", ModelTypes.Value.forType(String.class))
 					.get(ui.getModels());
 			isFileContentCaseSensitive = doc.getHead().getModels()
 					.get("config.fileTextCaseSensitive", ModelTypes.Value.forType(boolean.class)).get(ui.getModels());
@@ -248,7 +252,16 @@ public class QuickSearcher {
 			theMaxFileMatchLength = doc.getHead().getModels().get("config.maxFileMatchLength", ModelTypes.Value.forType(int.class))
 					.get(ui.getModels());
 			theDynamicExclusionPatterns = doc.getHead().getModels()
-					.get("config.excludedFileNames", ModelTypes.Collection.forType(Pattern.class)).get(ui.getModels());
+				.get("config.excludedFileNames", ModelTypes.Collection.forType(PatternConfig.class)).get(ui.getModels())//
+				.flow().map(Pattern.class, config -> {
+					if (config.getPattern() == null) {
+						return null;
+					} else if (config.isCaseSensitive()) {
+						return Pattern.compile(config.getPattern());
+					} else {
+						return Pattern.compile(config.getPattern(), Pattern.CASE_INSENSITIVE);
+					}
+				}).collect();
 			theMinSize = doc.getHead().getModels().get("config.minSize", ModelTypes.Value.forType(double.class)).get(ui.getModels())
 					.map(d -> Math.round(d));
 			theMaxSize = doc.getHead().getModels().get("config.maxSize", ModelTypes.Value.forType(double.class)).get(ui.getModels())
@@ -266,22 +279,28 @@ public class QuickSearcher {
 	}
 
 	private void doSearch() {
-		if(theStatus.get()!=SearchStatus.Idle) {
-			isCanceling=true;
+		if (theStatus.get() != SearchStatus.Idle) {
+			isCanceling = true;
 			return;
 		}
 		
 		isSearching=true;
 		BetterFile file = theSearchBase.get();
-		Pattern filePattern = theFileNamePattern.get();
-		if (filePattern != null && !isFileNameCaseSensitive.get()) {
-			filePattern=Pattern.compile(filePattern.pattern(), Pattern.CASE_INSENSITIVE);
+		Pattern filePattern;
+		String filePatternStr = theFileNamePattern.get();
+		if (filePatternStr != null && !isFileNameCaseSensitive.get()) {
+			filePattern = Pattern.compile(filePatternStr, Pattern.CASE_INSENSITIVE);
+		} else {
+			filePattern = null;
 		}
-		Pattern contentPattern = theFileContentPattern.get();
-		if (contentPattern != null && !isFileContentCaseSensitive.get()) {
-			contentPattern=Pattern.compile(contentPattern.pattern(), Pattern.CASE_INSENSITIVE);
+		Pattern contentPattern;
+		String contentPatternStr = theFileContentPattern.get();
+		if (contentPatternStr != null && !isFileContentCaseSensitive.get()) {
+			contentPattern = Pattern.compile(contentPatternStr, Pattern.CASE_INSENSITIVE);
+		} else {
+			contentPattern=null;
 		}
-		SearchResultNode rootResult = new SearchResultNode(null, file);
+		SearchResultNode rootResult = new SearchResultNode(++theSearchNumber, null, file);
 		ObservableSwingUtils.onEQ(() -> {
 			theStatus.set(SearchStatus.Searching, null);
 			theResults.set(rootResult, null);
@@ -290,9 +309,10 @@ public class QuickSearcher {
 		boolean succeeded = false;
 		int[] searched = new int[2];
 		try {
+			theStatusUpdateHandle.setActive(true);
 			doSearch(file, filePattern, contentPattern, isSearchingMultipleContentMatches.get(), //
 					theFileRequirements, () -> rootResult, new StringBuilder(),
-					new FileContentSeq(theMaxFileMatchLength.get()), false, searched);
+				new FileContentSeq(theMaxFileMatchLength.get()), new boolean[1], searched);
 			succeeded = true;
 		} finally {
 			isSearching=false;
@@ -300,7 +320,7 @@ public class QuickSearcher {
 			theStatusUpdateHandle.setActive(false);
 			theCurrentSearch = null;
 			boolean succ = succeeded;
-			EventQueue.invokeLater(() -> {
+			ObservableSwingUtils.onEQ(() -> {
 				theStatus.set(SearchStatus.Idle, null);
 				boolean canceled = isCanceling;
 				isCanceling = false;
@@ -320,7 +340,7 @@ public class QuickSearcher {
 
 	void doSearch(BetterFile file, Pattern filePattern, Pattern contentPattern, boolean searchMultiContent, //
 			Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts, Supplier<SearchResultNode> nodeGetter,
-			StringBuilder pathSeq, FileContentSeq contentSeq, boolean hasMatch, int[] searched) {
+		StringBuilder pathSeq, FileContentSeq contentSeq, boolean[] hasMatch, int[] searched) {
 		if (isCanceling) {
 			return;
 		}
@@ -369,7 +389,11 @@ public class QuickSearcher {
 			if (!matches) {
 				contentMatches = Collections.emptyList();
 			} else if (contentPattern != null) {
-				contentMatches = testFileContent(nodeGetter, contentPattern, file, searchMultiContent, contentSeq.clear());
+				if (file.isDirectory()) {
+					contentMatches=Collections.emptyList();
+				} else {
+					contentMatches = testFileContent(nodeGetter, contentPattern, file, searchMultiContent, contentSeq.clear());
+				}
 				matches = !contentMatches.isEmpty();
 			} else {
 				contentMatches = Collections.emptyList();
@@ -385,8 +409,8 @@ public class QuickSearcher {
 					node[0].textResults.addAll(contentMatches);
 				}
 				node[0].update(1, contentMatches.size());
-				if (!hasMatch) {
-					hasMatch = true;
+				if (!hasMatch[0]) {
+					hasMatch[0] = true;
 					ObservableSwingUtils.onEQ(() -> {
 						theSelectedResult.set(node[0], null);
 					});
@@ -414,7 +438,12 @@ public class QuickSearcher {
 	}
 
 	private String testFileName(BetterFile file) {
-		return testFileName(theFileNamePattern.get(), file.getPath()) == null ? "File name does not match" : null;
+		String filePattern = theFileNamePattern.get();
+		if (filePattern == null) {
+			return null;
+		}
+		return testFileName(Pattern.compile(filePattern, isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE),
+			file.getPath()) == null ? "File name does not match" : null;
 	}
 
 	private Matcher testFileName(Pattern filePattern, CharSequence path) {
@@ -489,15 +518,16 @@ public class QuickSearcher {
 		if (content == null) {
 			return null;
 		}
-		Pattern p = theFileContentPattern.get();
+		String p = theFileContentPattern.get();
 		if (p == null) {
 			return null;
 		}
-		Matcher m = p.matcher(content);
+		boolean caseSensitive = isFileContentCaseSensitive.get();
+		Matcher m = Pattern.compile(p, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE).matcher(content);
 		if (m.find()) {
 			return null;
 		}
-		return "No " + theFileContentPattern.get().pattern() + " match found";
+		return "No " + theFileContentPattern.get() + " match found";
 	}
 
 	private List<TextResult> testFileContent(Supplier<SearchResultNode> fileResult, Pattern contentPattern, BetterFile file,
@@ -506,7 +536,7 @@ public class QuickSearcher {
 		try (Reader reader = new BufferedReader(new InputStreamReader(file.read()))) {
 			while (seq.advance(reader, -1)) {
 				Matcher m = contentPattern.matcher(seq);
-				if (m.find()) {
+				while (m.find()) {
 					if (m.start() > 0) {
 						seq.advance(reader, m.start());
 						m = contentPattern.matcher(seq);
@@ -522,6 +552,11 @@ public class QuickSearcher {
 					if (!searchMulti) {
 						break;
 					}
+					seq.advance(reader, m.end());
+					m = contentPattern.matcher(seq);
+				}
+				if (!results.isEmpty() && !searchMulti) {
+					break;
 				}
 			}
 		} catch (IOException e) {
@@ -552,9 +587,9 @@ public class QuickSearcher {
 			}
 			boolean appending = true;
 			boolean hasMore = false;
+			boolean started = false, ended = false;
 			while (appending) {
 				long charPos = seq.getPosition();
-				boolean started = false, ended = false;
 				for (int i = 0; i < seq.length(); i++, charPos++) {
 					if (!started) {
 						if (charPos == result.position) {

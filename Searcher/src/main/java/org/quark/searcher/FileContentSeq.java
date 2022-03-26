@@ -158,6 +158,9 @@ class FileContentSeq implements CharSequence {
 	public void goToLine(Reader reader, long lineNumber) throws IOException {
 		do {
 			long endLine = theLine;
+			if (endLine >= lineNumber) {
+				return;
+			}
 			for (int i = 0; i < theFirstLength; i++) {
 				if (theFirstSequence[i] == '\n') {
 					endLine++;

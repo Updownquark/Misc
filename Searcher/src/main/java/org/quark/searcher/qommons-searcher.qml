@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<quick-debug
+<quick
 	uses:swing="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-swing.qtd"
 	uses:base="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-base.qtd"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
-	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit"
-	debug-visible="true">
+	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
 	<head>
 		<imports>
 			<import>org.quark.searcher.QuickSearcher</import>
@@ -29,7 +28,7 @@
 					<archive-method type="gz" />
 				</file-source>
 				<format name="fileFormat" type="file" file-source="files" working-dir="ext.workingDir" />
-				<format name="patternFormat" type="regex-format" />
+				<format name="patternFormat" type="regex-format-string" />
 				<format name="byteFormat" type="double" sig-digs="4" unit="b" metric-prefixes-p2="true" />
 				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="Past" />
 				<simple-config-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" default="Maybe" />
@@ -39,9 +38,9 @@
 				<value name="width" type="int" />
 				<value name="height" type="int" />
 				<value name="searchBase" type="BetterFile" format="fileFormat" default="." />
-				<value name="fileNamePattern" type="java.util.regex.Pattern" format="patternFormat" />
+				<value name="fileNamePattern" type="String" format="patternFormat" />
 				<value name="fileNameCaseSensitive" type="boolean" default="false" />
-				<value name="fileTextPattern" type="java.util.regex.Pattern" format="patternFormat" />
+				<value name="fileTextPattern" type="String" format="patternFormat" />
 				<value name="fileTextCaseSensitive" type="boolean" default="false" />
 				<value name="multiContentMatches" type="boolean" default="true" />
 				<value name="maxFileMatchLength" type="int" default="10000" />
@@ -159,15 +158,20 @@
 				<table rows="config.excludedFileNames" fill="true" value-name="row" render-value-name="col">
 					<titled-border title="Exclude Files" />
 					<column name="Pattern" value="row.getPattern()">
-						<column-edit type="modify-row-value" function="PatternConfig::setPattern">
+						<column-edit type="modify-row-value" edit-value-name="pattern" commit="row.setPattern(pattern)">
 							<text-field format="config.patternFormat" />
 						</column-edit>
 					</column>
 					<column name="Case" value="row.isCaseSensitive()">
-						<column-edit type="modify-row-value" function="PatternConfig::setCaseSensitive">
+						<check-box role="renderer" />
+						<column-edit type="modify-row-value" edit-value-name="cs" commit="row.setCaseSensitive(cs)">
 							<check-box />
 						</column-edit>
 					</column>
+					<multi-value-action value-list-name="blah" icon="icons/add.png" action="config.excludedFileNames.create().create()"
+						allow-for-empty="true" />
+					<multi-value-action value-list-name="rows" icon="icons/remove.png"
+						action="config.excludedFileNames.getValues().removeAll(rows)" allow-for-empty="true" />
 				</table>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
@@ -176,10 +180,17 @@
 			</field-panel>
 			<split orientation="vertical" split-position="${config.rightSplitDiv + &quot;%&quot;}">
 				<tree root="ext.resultRoot" value-name="path" render-value-name="node" children="node.getChildren()"
-					selection="app.selectedResult">
-					<column name="Tree" format="node.getFile().getName()" />
+					selection="app.selectedResult" leaf="!node.getFile().isDirectory()">
+					<column name="Tree">
+						<!-- These icons are from https://icons8.com, specifically icon/11651/file and icon/21079/folder" -->
+						<label role="renderer" value="node.getFile().getName()"
+							icon="&quot;icons/icons8-&quot;+(node.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
+					</column>
 				</tree>
 				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
+					<!-- visible should really be ""app.selectedResult!=null &amp;&amp; !app.textMatches.isEmpty()" -->
+					<label value="&quot;Text Matches In &quot;+app.selectedResult.getFile().getPath()"
+						visible="app.selectedResult!=null"/>
 					<table rows="app.textMatches" selection="app.selectedTextMatch" value-name="row" render-value-name="col">
 						<column name="Value" value="row.getValue()" />
 						<column name="Pos" value="row.getPosition()" />
@@ -192,4 +203,4 @@
 		</split>
 		<label value="ext.statusText" />
 	</box>
-</quick-debug>
+</quick>
