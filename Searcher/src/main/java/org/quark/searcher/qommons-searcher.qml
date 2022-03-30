@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <quick
-	uses:swing="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-swing.qtd"
-	uses:base="../../../../../../../ObServe/target/classes/org/observe/util/swing/quick-base.qtd"
+	uses:swing="../../../../../../../ObServe/target/classes/org/observe/quick/quick-swing.qtd"
+	uses:base="../../../../../../../ObServe/target/classes/org/observe/quick/quick-base.qtd"
+	uses:ext="../../../../../../../ObServe/target/classes/org/observe/quick/quick-ext.qtd"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
@@ -93,31 +94,35 @@
 	<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
 		<split orientation="horizontal" split-position="${config.mainSplitDiv + &quot;%&quot;}">
 			<field-panel>
-				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Search In:" fill="true"
-					tooltip="Root folder or file to search in">
-					<text-field value="config.searchBase" format="config.fileFormat" disable-with="app.configurable" columns="100" />
-					<file-button open="true" value="config.searchBase" disable-with="app.configurable" />
+				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Search In:" fill="true">
+					<text-field value="config.searchBase" format="config.fileFormat" disable-with="app.configurable" columns="100"
+						tooltip="Root folder or file to search in" />
+					<file-button open="true" value="config.searchBase" disable-with="app.configurable"
+						tooltip="Root folder or file to search in" />
 				</box>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
 					<label>----File Name----</label>
 				</box>
-				<box field-name="File Pattern:" layout="border" fill="true" tooltip="Pattern of file names to search for">
-					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable" />
+				<box field-name="File Pattern:" layout="border" fill="true">
+					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable"
+						tooltip="Pattern of file names to search for" />
 					<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
-				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Test File:" fill="true"
-					tooltip="Enter a file name to test the file pattern against it">
-					<text-field value="junk.testFilePath" format="junk.fileNamePatternFormat" disable-with="app.configurable" />
-					<file-button open="true" value="junk.testFilePath" disable-with="app.configurable" />
+				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Test File:" fill="true">
+					<text-field value="junk.testFilePath" format="junk.fileNamePatternFormat" disable-with="app.configurable"
+						tooltip="Enter a file name to test the file pattern against it" />
+					<file-button open="true" value="junk.testFilePath" disable-with="app.configurable"
+						tooltip="Enter a file name to test the file pattern against it" />
 				</box>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
 					<label>----File Content----</label>
 				</box>
-				<box field-name="Text Pattern:" layout="border" fill="true" tooltip="Text to search for in matching files">
-					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable" />
+				<box field-name="Text Pattern:" layout="border" fill="true">
+					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable"
+						tooltip="Text to search for in matching files" />
 					<check-box region="east" value="config.fileTextCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the text pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
@@ -125,35 +130,39 @@
 					tooltip="Enter text to test the text pattern against it" />
 				<check-box value="config.multiContentMatches" field-name="Multiple Text Matches:" disable-with="app.configurable" />
 				<spacer length="3" />
-				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
-					<label>----File Metadata----</label>
-				</box>
-				<text-field field-name="Max Archive Depth:" value="config.zipLevel" disable-with="app.configurable" columns="8"
-					tooltip="Maximum number of archives to descend into recursively" />
-				<radio-buttons field-name="Directory:" render-value-name="type" value="config.fileRequirements.observe(Directory)"
-					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
-					tooltip="Whether matching files may/must/cannot be directories" />
-				<radio-buttons field-name="Readable:" render-value-name="type" value="config.fileRequirements.observe(Readable)"
-					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
-					tooltip="Whether matching files may/must/cannot be readable" />
-				<radio-buttons field-name="Writable:" render-value-name="type" value="config.fileRequirements.observe(Writable)"
-					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
-					tooltip="Whether matching files may/must/cannot be writable" />
-				<radio-buttons field-name="Hidden:" render-value-name="type" value="config.fileRequirements.observe(Hidden)"
-					values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
-					tooltip="Whether matching files may/must/cannot be hidden" />
-				<box field-name="Size:" layout="inline" orientation="horizontal" main-align="justify" fill="true"
-					tooltip="Size range for matching files">
-					<text-field value="config.minSize" format="config.byteFormat" disable-with="app.configurable" />
-					<label>...</label>
-					<text-field value="config.maxSize" format="config.byteFormat" disable-with="app.configurable" />
-				</box>
-				<box field-name="Last Modified:" layout="inline" orientation="horizontal" main-align="justify" fill="true"
-					tooltip="Last modified date range for matching files">
-					<text-field value="config.minLM" format="config.timeFormat" disable-with="app.configurable" columns="100" />
-					<label>...</label>
-					<text-field value="config.maxLM" format="config.timeFormat" disable-with="app.configurable" columns="100" />
-				</box>
+				<collapse-pane fill="true" name="debug">
+					<box role="header" layout="inline" orientation="vertical" main-align="center">
+						<label>----File Metadata----</label>
+					</box>
+					<field-panel role="content">
+						<text-field field-name="Max Archive Depth:" value="config.zipLevel" disable-with="app.configurable" columns="8"
+							tooltip="Maximum number of archives to descend into recursively" />
+						<radio-buttons field-name="Directory:" render-value-name="type" value="config.fileRequirements.observe(Directory)"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							tooltip="Whether matching files may/must/cannot be directories" />
+						<radio-buttons field-name="Readable:" render-value-name="type" value="config.fileRequirements.observe(Readable)"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							tooltip="Whether matching files may/must/cannot be readable" />
+						<radio-buttons field-name="Writable:" render-value-name="type" value="config.fileRequirements.observe(Writable)"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							tooltip="Whether matching files may/must/cannot be writable" />
+						<radio-buttons field-name="Hidden:" render-value-name="type" value="config.fileRequirements.observe(Hidden)"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							tooltip="Whether matching files may/must/cannot be hidden" />
+						<box field-name="Size:" layout="inline" orientation="horizontal" main-align="justify" fill="true"
+							tooltip="Size range for matching files">
+							<text-field value="config.minSize" format="config.byteFormat" disable-with="app.configurable" />
+							<label>...</label>
+							<text-field value="config.maxSize" format="config.byteFormat" disable-with="app.configurable" />
+						</box>
+						<box field-name="Last Modified:" layout="inline" orientation="horizontal" main-align="justify" fill="true"
+							tooltip="Last modified date range for matching files">
+							<text-field value="config.minLM" format="config.timeFormat" disable-with="app.configurable" columns="100" />
+							<label>...</label>
+							<text-field value="config.maxLM" format="config.timeFormat" disable-with="app.configurable" columns="100" />
+						</box>
+					</field-panel>
+				</collapse-pane>
 				<spacer length="3" />
 				<table rows="config.excludedFileNames" fill="true" value-name="row" render-value-name="col">
 					<titled-border title="Exclude Files" />
