@@ -13,7 +13,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.observe.ObservableAction;
@@ -33,7 +32,6 @@ import org.observe.quick.QuickX;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.qommons.QommonsUtils;
-import org.qommons.QommonsUtils.NamedGroupCapture;
 import org.qommons.StringUtils;
 import org.qommons.collect.ElementId;
 import org.qommons.config.DefaultQonfigParser;
@@ -41,13 +39,18 @@ import org.qommons.config.QonfigInterpretationException;
 import org.qommons.config.QonfigParseException;
 import org.qommons.io.BetterFile;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
+import org.qommons.io.BetterPattern;
+import org.qommons.io.BetterPattern.Match;
+import org.qommons.io.BetterPattern.Matcher;
+import org.qommons.io.BetterPattern.NamedGroupCapture;
 import org.qommons.threading.QommonsTimer;
 
+/** Java business logic for the Quick-based search app */
 public class QuickSearcher {
-	/** This constant disables the "Regex:" checkboxes in the file name and content widgets. These are not yet supported. */
-	public static final boolean ALLOW_NO_REGEX = false;
+	/** The default max file size to populate if the user hasn't yet selected one */
 	public static final double DEFAULT_MAX_SIZE = 1024L * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
 
+	/** Represents a file matching the search, or the parent of such a file */
 	public static class SearchResultNode {
 		/** Just for debugging */
 		final int searchNumber;
@@ -89,18 +92,22 @@ public class QuickSearcher {
 			}
 		}
 
+		/** @return The matched file */
 		public BetterFile getFile() {
 			return file;
 		}
 
+		/** @return The parent node */
 		public SearchResultNode getParent() {
 			return parent;
 		}
 
+		/** @return This node's children */
 		public ObservableSortedSet<SearchResultNode> getChildren() {
 			return children;
 		}
 
+		/** @return The text matches in this file */
 		public ObservableCollection<TextResult> getTextResults() {
 			return textResults;
 		}
@@ -111,6 +118,7 @@ public class QuickSearcher {
 		}
 	}
 
+	/** Represents a text match in a file */
 	public static class TextResult {
 		final SearchResultNode fileResult;
 		final long position;
@@ -129,26 +137,32 @@ public class QuickSearcher {
 			this.captures = captures;
 		}
 
+		/** @return The file that this match belongs to */
 		public SearchResultNode getFileResult() {
 			return fileResult;
 		}
 
+		/** @return The absolute character position in the file of the start of this match */
 		public long getPosition() {
 			return position;
 		}
 
+		/** @return The line number of the start of this match */
 		public long getLineNumber() {
 			return lineNumber;
 		}
 
+		/** @return The column number of the start of this match in the line */
 		public long getColumnNumber() {
 			return columnNumber;
 		}
 
+		/** @return The text of this match */
 		public String getValue() {
 			return value;
 		}
 
+		/** @return The named group captures of this match */
 		public Map<String, NamedGroupCapture> getCaptures() {
 			return captures;
 		}
@@ -159,10 +173,21 @@ public class QuickSearcher {
 		}
 	}
 
+	/** Status of the search app */
 	public enum SearchStatus {
-		Idle, Searching, Canceling
+		/** Not searching */
+		Idle,
+		/** Actively searching */
+		Searching,
+		/** User has asked the search to be canceled, but the cancellation is not complete */
+		Canceling
 	}
 
+	/**
+	 * Main method, launches the app
+	 * 
+	 * @param args Command-line arguments, ignored
+	 */
 	public static void main(String... args) {
 		String workingDir = System.getProperty("user.dir");
 		EventQueue.invokeLater(() -> new QuickSearcher(workingDir));
@@ -171,7 +196,7 @@ public class QuickSearcher {
 	private final SettableValue<SearchResultNode> theResults;
 	private final SettableValue<SearchStatus> theStatus;
 	private final SettableValue<String> theStatusMessage;
-	private final List<Pattern> theDynamicExclusionPatterns;
+	private final List<BetterPattern> theDynamicExclusionPatterns;
 
 	private final ObservableValue<BetterFile> theSearchBase;
 	private final ObservableValue<String> theFileNamePattern;
@@ -192,10 +217,12 @@ public class QuickSearcher {
 	private final QommonsTimer.TaskHandle theStatusUpdateHandle;
 
 	private BetterFile theCurrentSearch;
-	private boolean isSearching;
 	private boolean isCanceling;
 	private int theSearchNumber;
 
+	/**
+	 * @param workingDir The directory to use for the working directory--affects the location of non-absolute file paths
+	 */
 	public QuickSearcher(String workingDir) {
 		theResults = SettableValue.build(SearchResultNode.class).build();
 		theStatus = SettableValue.build(SearchStatus.class).withValue(SearchStatus.Idle).build();
@@ -261,13 +288,13 @@ public class QuickSearcher {
 				.get(ui.getModels());
 			theDynamicExclusionPatterns = doc.getHead().getModels()
 				.get("config.excludedFileNames", ModelTypes.Collection.forType(PatternConfig.class)).get(ui.getModels())//
-				.flow().map(Pattern.class, config -> {
+				.flow().map(BetterPattern.class, config -> {
 					if (config.getPattern() == null) {
 						return null;
 					} else if (config.isCaseSensitive()) {
-						return Pattern.compile(config.getPattern());
+						return BetterPattern.compile(config.getPattern());
 					} else {
-						return Pattern.compile(config.getPattern(), Pattern.CASE_INSENSITIVE);
+						return BetterPattern.compile(config.getPattern(), Pattern.CASE_INSENSITIVE);
 					}
 				}).collect();
 			theMinSize = doc.getHead().getModels().get("config.minSize", ModelTypes.Value.forType(double.class)).get(ui.getModels())
@@ -300,20 +327,22 @@ public class QuickSearcher {
 			return;
 		}
 
-		isSearching = true;
 		BetterFile file = theSearchBase.get();
-		// TODO handle file name and content when not regex
-		Pattern filePattern;
+		BetterPattern filePattern;
 		String filePatternStr = theFileNamePattern.get();
-		if (filePatternStr != null && !filePatternStr.isEmpty()) {
-			filePattern = Pattern.compile(filePatternStr, !isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
+		if (!isFileNameRegex.get()) {
+			filePattern = new BetterPattern.SimpleStringSearch(filePatternStr, !isFileNameCaseSensitive.get(), true);
+		} else if (filePatternStr != null && !filePatternStr.isEmpty()) {
+			filePattern = BetterPattern.compile(filePatternStr, isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
 		} else {
 			filePattern = null;
 		}
-		Pattern contentPattern;
+		BetterPattern contentPattern;
 		String contentPatternStr = theFileContentPattern.get();
-		if (contentPatternStr != null && !contentPatternStr.isEmpty()) {
-			contentPattern = Pattern.compile(contentPatternStr, isFileContentCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
+		if (!isFileContentRegex.get()) {
+			contentPattern = new BetterPattern.SimpleStringSearch(contentPatternStr, !isFileContentCaseSensitive.get(), true);
+		} else if (contentPatternStr != null && !contentPatternStr.isEmpty()) {
+			contentPattern = BetterPattern.compile(contentPatternStr, isFileContentCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
 		} else {
 			contentPattern = null;
 		}
@@ -332,7 +361,6 @@ public class QuickSearcher {
 				result);
 			succeeded = true;
 		} finally {
-			isSearching = false;
 			long end = System.currentTimeMillis();
 			theStatusUpdateHandle.setActive(false);
 			theCurrentSearch = null;
@@ -363,7 +391,7 @@ public class QuickSearcher {
 		}
 	}
 
-	void doSearch(BetterFile file, Pattern filePattern, Pattern contentPattern, boolean searchMultiContent, //
+	void doSearch(BetterFile file, BetterPattern filePattern, BetterPattern contentPattern, boolean searchMultiContent, //
 		Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts, Supplier<SearchResultNode> nodeGetter, StringBuilder pathSeq,
 		FileContentSeq contentSeq, boolean[] hasMatch, SearchResult result) {
 		if (isCanceling) {
@@ -376,7 +404,7 @@ public class QuickSearcher {
 		}
 		pathSeq.append(file.getName());
 		theCurrentSearch = file;
-		for (Pattern exclusion : theDynamicExclusionPatterns) {
+		for (BetterPattern exclusion : theDynamicExclusionPatterns) {
 			if (testFileName(exclusion, pathSeq) != null) {
 				if (isCanceling) {
 					return;
@@ -389,7 +417,7 @@ public class QuickSearcher {
 			return;
 		}
 		SearchResultNode[] node = new SearchResultNode[1];
-		Matcher fileMatcher = testFileName(filePattern, pathSeq);
+		Match fileMatcher = testFileName(filePattern, pathSeq);
 		if (isCanceling) {
 			return;
 		}
@@ -435,7 +463,7 @@ public class QuickSearcher {
 			}
 			if (matches) {
 				node[0] = nodeGetter.get();
-				node[0].matchGroups = filePattern == null ? Collections.emptyMap() : QommonsUtils.getCaptureGroups(fileMatcher);
+				node[0].matchGroups = filePattern == null ? Collections.emptyMap() : fileMatcher.getGroups();
 				if (!contentMatches.isEmpty()) {
 					node[0].textResults.addAll(contentMatches);
 				}
@@ -473,21 +501,21 @@ public class QuickSearcher {
 		if (filePattern == null) {
 			return null;
 		}
-		return testFileName(Pattern.compile(filePattern, isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE),
+		return testFileName(BetterPattern.compile(filePattern, isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE),
 			file.getPath()) == null ? "File name does not match" : null;
 	}
 
-	private Matcher testFileName(Pattern filePattern, CharSequence path) {
+	private Match testFileName(BetterPattern filePattern, CharSequence path) {
 		if (filePattern == null) {
 			return null;
 		}
 		Matcher matcher = filePattern.matcher(path);
 		// The path must END with the pattern
-		boolean found = matcher.find();
-		while (found && matcher.end() != path.length()) {
-			found = matcher.find(matcher.start() + 1);
+		Match found = matcher.find();
+		while (found != null && found.getEnd() != path.length()) {
+			found = matcher.find(found.getStart() + 1);
 		}
-		return found ? matcher : null;
+		return found;
 		// BetterFile f = file;
 		// while (f != null) {
 		// seq.advance(f.getName());
@@ -554,24 +582,24 @@ public class QuickSearcher {
 			return null;
 		}
 		boolean caseSensitive = isFileContentCaseSensitive.get();
-		Matcher m = Pattern.compile(p, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE).matcher(content);
-		if (m.find()) {
+		Matcher m = BetterPattern.compile(p, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE).matcher(content);
+		if (m.find() == null) {
 			return null;
 		}
 		return "No " + theFileContentPattern.get() + " match found";
 	}
 
-	private List<TextResult> testFileContent(Supplier<SearchResultNode> fileResult, Pattern contentPattern, BetterFile file,
+	private List<TextResult> testFileContent(Supplier<SearchResultNode> fileResult, BetterPattern contentPattern, BetterFile file,
 		boolean searchMulti, FileContentSeq seq) {
 		List<TextResult> results = Collections.emptyList();
 		try (Reader reader = new BufferedReader(new InputStreamReader(file.read()))) {
 			while (seq.advance(reader, -1)) {
 				Matcher m = contentPattern.matcher(seq);
-				while (m.find()) {
-					if (m.start() > 0) {
-						seq.advance(reader, m.start());
+				for (Match match = m.find(); match != null; match = m.find()) {
+					if (match.getStart() > 0) {
+						seq.advance(reader, match.getStart());
 						m = contentPattern.matcher(seq);
-						if (!m.lookingAt()) {
+						if ((match = m.lookingAt()) == null) {
 							System.err.println("Lost a match?");
 							continue;
 						}
@@ -579,11 +607,11 @@ public class QuickSearcher {
 					if (results.isEmpty()) {
 						results = new ArrayList<>(searchMulti ? 1 : 5);
 					}
-					results.add(makeTextResult(fileResult.get(), m, seq.getPosition(), seq.getLine(), seq.getColumn()));
+					results.add(makeTextResult(fileResult.get(), match, seq.getPosition(), seq.getLine(), seq.getColumn()));
 					if (!searchMulti) {
 						break;
 					}
-					seq.advance(reader, m.end());
+					seq.advance(reader, match.getEnd());
 					m = contentPattern.matcher(seq);
 				}
 				if (!results.isEmpty() && !searchMulti) {
@@ -596,8 +624,8 @@ public class QuickSearcher {
 		return results;
 	}
 
-	private TextResult makeTextResult(SearchResultNode fileResult, Matcher matcher, long position, long lineNumber, long columnNumber) {
-		return new TextResult(fileResult, position, lineNumber, columnNumber, matcher.group(), QommonsUtils.getCaptureGroups(matcher));
+	private TextResult makeTextResult(SearchResultNode fileResult, Match match, long position, long lineNumber, long columnNumber) {
+		return new TextResult(fileResult, position, lineNumber, columnNumber, match.toString(), match.getGroups());
 	}
 
 	public static String renderTextResult(TextResult result) {

@@ -93,7 +93,7 @@
 				<box field-name="File Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable"
 						tooltip="Pattern of file names to search for" />
-					<check-box value="config.fileNameRegex" disable-with="app.configurable" visible="QuickSearcher.ALLOW_NO_REGEX"
+					<check-box value="config.fileNameRegex" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated as a regular expression">Regex:</check-box>
 					<check-box value="config.fileNameCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated case-sensitively">Case:</check-box>
@@ -121,7 +121,7 @@
 				<box field-name="Text Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable"
 						tooltip="Text to search for in matching files" />
-					<check-box value="config.fileTextRegex" disable-with="app.configurable" visible="QuickSearcher.ALLOW_NO_REGEX"
+					<check-box value="config.fileTextRegex" disable-with="app.configurable"
 						tooltip="Whether the file content pattern is evaluated as a regular expression">Regex:</check-box>
 					<check-box value="config.fileTextCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the text pattern is evaluated case-sensitively">Case:</check-box>
