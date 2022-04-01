@@ -40,8 +40,10 @@
 				<value name="height" type="int" />
 				<value name="searchBase" type="BetterFile" format="fileFormat" default="." />
 				<value name="fileNamePattern" type="String" format="patternFormat" />
+				<value name="fileNameRegex" type="boolean" default="true" />
 				<value name="fileNameCaseSensitive" type="boolean" default="false" />
 				<value name="fileTextPattern" type="String" format="patternFormat" />
+				<value name="fileTextRegex" type="boolean" default="true" />
 				<value name="fileTextCaseSensitive" type="boolean" default="false" />
 				<value name="multiContentMatches" type="boolean" default="true" />
 				<value name="maxFileMatchLength" type="int" default="10000" />
@@ -73,22 +75,6 @@
 					<map-to function="QuickSearcher::renderTextResult" />
 				</transform>
 			</model>
-			<model name="junk">
-				<value name="_testFilePath" type="BetterFile" />
-				<transform name="testFilePath" source="_testFilePath">
-					<refresh on="config.fileNamePattern" />
-				</transform>
-				<value name="_testFileContent" type="String" />
-				<transform name="testFileContent" source="_testFileContent">
-					<refresh on="config.fileTextPattern" />
-				</transform>
-				<format name="fileNamePatternFormat" type="file" file-source="config.files" working-dir="ext.workingDir">
-					<validate type="regex-validation" pattern="config.fileNamePattern" />
-				</format>
-				<format name="fileContentPatternFormat" type="text">
-					<validate type="regex-validation" pattern="${config.fileTextPattern}" />
-				</format>
-			</model>
 		</models>
 	</head>
 	<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
@@ -104,30 +90,55 @@
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
 					<label>----File Name----</label>
 				</box>
-				<box field-name="File Pattern:" layout="border" fill="true">
+				<box field-name="File Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable"
 						tooltip="Pattern of file names to search for" />
-					<check-box region="east" value="config.fileNameCaseSensitive" disable-with="app.configurable"
+					<check-box value="config.fileNameRegex" disable-with="app.configurable" visible="QuickSearcher.ALLOW_NO_REGEX"
+						tooltip="Whether the file pattern is evaluated as a regular expression">Regex:</check-box>
+					<check-box value="config.fileNameCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
-				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Test File:" fill="true">
-					<text-field value="junk.testFilePath" format="junk.fileNamePatternFormat" disable-with="app.configurable"
+				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Test File:" fill="true"
+					visible="config.fileNameRegex">
+					<model>
+						<value name="_testFilePath" type="BetterFile" />
+						<transform name="testFilePath" source="_testFilePath">
+							<refresh on="config.fileNamePattern" />
+						</transform>
+						<format name="fileNamePatternFormat" type="file" file-source="config.files" working-dir="ext.workingDir">
+							<validate type="regex-validation" pattern="config.fileNamePattern" />
+						</format>
+					</model>
+					<text-field value="testFilePath" format="fileNamePatternFormat" disable-with="app.configurable"
 						tooltip="Enter a file name to test the file pattern against it" />
-					<file-button open="true" value="junk.testFilePath" disable-with="app.configurable"
+					<file-button open="true" value="testFilePath" disable-with="app.configurable"
 						tooltip="Enter a file name to test the file pattern against it" />
 				</box>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
 					<label>----File Content----</label>
 				</box>
-				<box field-name="Text Pattern:" layout="border" fill="true">
+				<box field-name="Text Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable"
 						tooltip="Text to search for in matching files" />
-					<check-box region="east" value="config.fileTextCaseSensitive" disable-with="app.configurable"
+					<check-box value="config.fileTextRegex" disable-with="app.configurable" visible="QuickSearcher.ALLOW_NO_REGEX"
+						tooltip="Whether the file content pattern is evaluated as a regular expression">Regex:</check-box>
+					<check-box value="config.fileTextCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the text pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
-				<text-field field-name="Test Text:" value="junk.testFileContent" format="junk.fileContentPatternFormat" fill="true"
-					tooltip="Enter text to test the text pattern against it" />
+				<box field-name="Test Text:" layout="border" fill="true" visible="config.fileTextRegex">
+					<model>
+						<value name="_testFileContent" type="String" />
+						<transform name="testFileContent" source="_testFileContent">
+							<refresh on="config.fileTextPattern" />
+						</transform>
+						<format name="fileContentPatternFormat" type="text">
+							<validate type="regex-validation" pattern="${config.fileTextPattern}" />
+						</format>
+					</model>
+					<text-field value="testFileContent" format="fileContentPatternFormat"
+						tooltip="Enter text to test the text pattern against it" />
+				</box>
 				<check-box value="config.multiContentMatches" field-name="Multiple Text Matches:" disable-with="app.configurable" />
 				<spacer length="3" />
 				<collapse-pane fill="true" name="debug">

@@ -24,7 +24,6 @@ import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedSet;
 import org.observe.expresso.ExpressoInterpreter;
 import org.observe.expresso.ModelTypes;
-import org.observe.expresso.ObservableModelQonfigParser;
 import org.observe.expresso.ObservableModelSet;
 import org.observe.quick.QuickBase;
 import org.observe.quick.QuickDocument;
@@ -45,6 +44,8 @@ import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.threading.QommonsTimer;
 
 public class QuickSearcher {
+	/** This constant disables the "Regex:" checkboxes in the file name and content widgets. These are not yet supported. */
+	public static final boolean ALLOW_NO_REGEX = false;
 	public static final double DEFAULT_MAX_SIZE = 1024L * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
 
 	public static class SearchResultNode {
@@ -174,8 +175,10 @@ public class QuickSearcher {
 
 	private final ObservableValue<BetterFile> theSearchBase;
 	private final ObservableValue<String> theFileNamePattern;
+	private final ObservableValue<Boolean> isFileNameRegex;
 	private final ObservableValue<Boolean> isFileNameCaseSensitive;
 	private final ObservableValue<String> theFileContentPattern;
+	private final ObservableValue<Boolean> isFileContentRegex;
 	private final ObservableValue<Boolean> isFileContentCaseSensitive;
 	private final ObservableValue<Boolean> isSearchingMultipleContentMatches;
 	private final ObservableMap<FileBooleanAttribute, FileAttributeRequirement> theFileRequirements;
@@ -203,7 +206,7 @@ public class QuickSearcher {
 				.withSubModel("ext",
 					sub -> sub
 						.with("workingDir", ModelTypes.Value.forType(String.class),
-							ObservableModelQonfigParser.literal(workingDir, "\"" + workingDir + "\""))//
+							ObservableModelSet.literal(workingDir, "\"" + workingDir + "\""))//
 						.with("resultRoot", ModelTypes.Value.forType(SearchResultNode.class), theResults)//
 						.with("status", ModelTypes.Value.forType(SearchStatus.class), theStatus)//
 						.with("statusText", ModelTypes.Value.forType(String.class), theStatusMessage)//
@@ -239,9 +242,13 @@ public class QuickSearcher {
 				.get(ui.getModels());
 			theFileNamePattern = doc.getHead().getModels().get("config.fileNamePattern", ModelTypes.Value.forType(String.class))
 				.get(ui.getModels());
+			isFileNameRegex = doc.getHead().getModels().get("config.fileNameRegex", ModelTypes.Value.forType(boolean.class))
+				.get(ui.getModels());
 			isFileNameCaseSensitive = doc.getHead().getModels().get("config.fileNameCaseSensitive", ModelTypes.Value.forType(boolean.class))
 				.get(ui.getModels());
 			theFileContentPattern = doc.getHead().getModels().get("config.fileTextPattern", ModelTypes.Value.forType(String.class))
+				.get(ui.getModels());
+			isFileContentRegex = doc.getHead().getModels().get("config.fileTextRegex", ModelTypes.Value.forType(boolean.class))
 				.get(ui.getModels());
 			isFileContentCaseSensitive = doc.getHead().getModels()
 				.get("config.fileTextCaseSensitive", ModelTypes.Value.forType(boolean.class)).get(ui.getModels());
@@ -295,6 +302,7 @@ public class QuickSearcher {
 
 		isSearching = true;
 		BetterFile file = theSearchBase.get();
+		// TODO handle file name and content when not regex
 		Pattern filePattern;
 		String filePatternStr = theFileNamePattern.get();
 		if (filePatternStr != null && !filePatternStr.isEmpty()) {
