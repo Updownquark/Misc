@@ -92,14 +92,14 @@
 				</box>
 				<box field-name="File Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable"
-						tooltip="Pattern of file names to search for" />
+						commit-on-type="true" tooltip="Pattern of file names to search for" />
 					<check-box value="config.fileNameRegex" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated as a regular expression">Regex:</check-box>
 					<check-box value="config.fileNameCaseSensitive" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Test File:" fill="true"
-					visible="config.fileNameRegex">
+					visible="config.fileNamePattern!=null &amp; !config.fileNamePattern.isEmpty() &amp; config.fileNameRegex">
 					<model>
 						<value name="_testFilePath" type="BetterFile" />
 						<transform name="testFilePath" source="_testFilePath">
@@ -110,7 +110,7 @@
 						</format>
 					</model>
 					<text-field value="testFilePath" format="fileNamePatternFormat" disable-with="app.configurable"
-						tooltip="Enter a file name to test the file pattern against it" />
+						commit-on-type="true" tooltip="Enter a file name to test the file pattern against it" />
 					<file-button open="true" value="testFilePath" disable-with="app.configurable"
 						tooltip="Enter a file name to test the file pattern against it" />
 				</box>
@@ -119,14 +119,21 @@
 					<label>----File Content----</label>
 				</box>
 				<box field-name="Text Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
+					<model>
+						<first-value name="textPatternModEnabled">
+							<value>app.configurable</value>
+							<value>config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? &quot;No Text Pattern set&quot;"</value>
+						</first-value>
+					</model>
 					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable"
-						tooltip="Text to search for in matching files" />
-					<check-box value="config.fileTextRegex" disable-with="app.configurable"
+						commit-on-type="true" tooltip="Text to search for in matching files" />
+					<check-box value="config.fileTextRegex" disable-with="textPatternModEnabled"
 						tooltip="Whether the file content pattern is evaluated as a regular expression">Regex:</check-box>
-					<check-box value="config.fileTextCaseSensitive" disable-with="app.configurable"
+					<check-box value="config.fileTextCaseSensitive" disable-with="textPatternModEnabled"
 						tooltip="Whether the text pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
-				<box field-name="Test Text:" layout="border" fill="true" visible="config.fileTextRegex">
+				<box field-name="Test Text:" layout="border" fill="true"
+					visible="config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty() &amp; config.fileTextRegex">
 					<model>
 						<value name="_testFileContent" type="String" />
 						<transform name="testFileContent" source="_testFileContent">
@@ -137,7 +144,7 @@
 						</format>
 					</model>
 					<text-field value="testFileContent" format="fileContentPatternFormat"
-						tooltip="Enter text to test the text pattern against it" />
+						commit-on-type="true" tooltip="Enter text to test the text pattern against it" />
 				</box>
 				<check-box value="config.multiContentMatches" field-name="Multiple Text Matches:" disable-with="app.configurable" />
 				<spacer length="3" />

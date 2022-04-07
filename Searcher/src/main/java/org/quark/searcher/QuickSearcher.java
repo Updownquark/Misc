@@ -330,21 +330,21 @@ public class QuickSearcher {
 		BetterFile file = theSearchBase.get();
 		BetterPattern filePattern;
 		String filePatternStr = theFileNamePattern.get();
-		if (!isFileNameRegex.get()) {
-			filePattern = new BetterPattern.SimpleStringSearch(filePatternStr, !isFileNameCaseSensitive.get(), true);
-		} else if (filePatternStr != null && !filePatternStr.isEmpty()) {
-			filePattern = BetterPattern.compile(filePatternStr, isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
-		} else {
+		if (filePatternStr == null || filePatternStr.isEmpty()) {
 			filePattern = null;
+		} else if (!isFileNameRegex.get()) {
+			filePattern = new BetterPattern.SimpleStringSearch(filePatternStr, !isFileNameCaseSensitive.get(), true);
+		} else {
+			filePattern = filePattern(filePatternStr, isFileNameCaseSensitive.get());
 		}
 		BetterPattern contentPattern;
 		String contentPatternStr = theFileContentPattern.get();
-		if (!isFileContentRegex.get()) {
-			contentPattern = new BetterPattern.SimpleStringSearch(contentPatternStr, !isFileContentCaseSensitive.get(), true);
-		} else if (contentPatternStr != null && !contentPatternStr.isEmpty()) {
-			contentPattern = BetterPattern.compile(contentPatternStr, isFileContentCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
-		} else {
+		if (contentPatternStr == null || contentPatternStr.isEmpty()) {
 			contentPattern = null;
+		} else if (!isFileContentRegex.get()) {
+			contentPattern = new BetterPattern.SimpleStringSearch(contentPatternStr, !isFileContentCaseSensitive.get(), true);
+		} else {
+			contentPattern = BetterPattern.compile(contentPatternStr, isFileContentCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE);
 		}
 		SearchResultNode rootResult = new SearchResultNode(++theSearchNumber, null, file);
 		ObservableSwingUtils.onEQ(() -> {
@@ -399,10 +399,11 @@ public class QuickSearcher {
 		}
 
 		int prePathLen = pathSeq.length();
-		if (prePathLen > 0) {
+		pathSeq.append(file.getName());
+		boolean dir = file.isDirectory();
+		if (dir) {
 			pathSeq.append('/');
 		}
-		pathSeq.append(file.getName());
 		theCurrentSearch = file;
 		for (BetterPattern exclusion : theDynamicExclusionPatterns) {
 			if (testFileName(exclusion, pathSeq) != null) {
@@ -421,7 +422,6 @@ public class QuickSearcher {
 		if (isCanceling) {
 			return;
 		}
-		boolean dir = file.isDirectory();
 		if (filePattern == null || fileMatcher != null) {
 			boolean matches = true;
 			for (FileBooleanAttribute attr : FileBooleanAttribute.values()) {
@@ -496,36 +496,74 @@ public class QuickSearcher {
 		pathSeq.setLength(prePathLen);
 	}
 
+	private static BetterPattern filePattern(String filePatternStr, boolean caseSensitive) {
+		filePatternStr = filePatternStr.replaceAll("//", "/.*/");
+		return BetterPattern.compile(filePatternStr, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE);
+	}
+
 	private String testFileName(BetterFile file) {
 		String filePattern = theFileNamePattern.get();
 		if (filePattern == null) {
 			return null;
 		}
-		return testFileName(BetterPattern.compile(filePattern, isFileNameCaseSensitive.get() ? 0 : Pattern.CASE_INSENSITIVE),
-			file.getPath()) == null ? "File name does not match" : null;
+		String filePath = file.getPath();
+		if (!filePath.endsWith("/") && file.isDirectory()) {
+			filePath += "/";
+		}
+		return testFileName(filePattern(filePattern, isFileNameCaseSensitive.get()), filePath) == null ? "File name does not match" : null;
 	}
 
 	private Match testFileName(BetterPattern filePattern, CharSequence path) {
 		if (filePattern == null) {
 			return null;
 		}
-		Matcher matcher = filePattern.matcher(path);
-		// The path must END with the pattern
-		Match found = matcher.find();
-		while (found != null && found.getEnd() != path.length()) {
-			found = matcher.find(found.getStart() + 1);
+		if (path.toString().endsWith(".class") && path.toString().contains("swing")) {
+			// BreakpointHere.breakpoint();
+		}
+		Match found;
+		if (filePattern.toString().indexOf('/') >= 0) {
+			// Otherwise, we need to include more of the path
+			if (filePattern.toString().contains("/.*/")) {
+				// Double-slash -- multi-path matcher. Need to try every path up to the root of the search
+				found = null;
+				for (int i = path.length() - 1; found == null && i >= 0; i--) {
+					if (path.charAt(i) == '/') {
+						Matcher matcher = filePattern.matcher(StringUtils.cheapSubSequence(path, i + 1, path.length()));
+						found = matcher.matches();
+					}
+				}
+				if (found == null) {
+					Matcher matcher = filePattern.matcher(path);
+					found = matcher.matches();
+				}
+			} else {
+				int slashes = 1;
+				for (int i = 0; i < filePattern.toString().length(); i++) {
+					if (filePattern.toString().charAt(i) == '/') {
+						slashes++;
+					}
+				}
+				int targetIdx;
+				for (targetIdx = path.length(); targetIdx > 0 && slashes > 0; targetIdx--) {
+					if (path.charAt(targetIdx - 1) == '/') {
+						slashes--;
+					}
+				}
+				if (slashes == 0) {
+					Matcher matcher = filePattern.matcher(StringUtils.cheapSubSequence(path, targetIdx + 1, path.length()));
+					found = matcher.matches();
+				} else {
+					found=null;
+				}
+			}
+		} else {
+			// If the pattern does not explicitly accommodate directories, then we only match the terminal file.
+			int lastSlash;
+			for (lastSlash = path.length() - 1; lastSlash >= 0 && path.charAt(lastSlash) != '/'; lastSlash--) {}
+			Matcher matcher = filePattern.matcher(StringUtils.cheapSubSequence(path, lastSlash + 1, path.length()));
+			found = matcher.matches();
 		}
 		return found;
-		// BetterFile f = file;
-		// while (f != null) {
-		// seq.advance(f.getName());
-		// Matcher matcher = filePattern.matcher(seq);
-		// if (matcher.matches()) {
-		// return matcher;
-		// }
-		// f = f.getParent();
-		// }
-		// return null;
 	}
 
 	static class SubSeq implements CharSequence {
