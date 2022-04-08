@@ -2,8 +2,6 @@
 
 <quick
 	uses:swing="../../../../../../../ObServe/target/classes/org/observe/quick/quick-swing.qtd"
-	uses:base="../../../../../../../ObServe/target/classes/org/observe/quick/quick-base.qtd"
-	uses:ext="../../../../../../../ObServe/target/classes/org/observe/quick/quick-ext.qtd"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">

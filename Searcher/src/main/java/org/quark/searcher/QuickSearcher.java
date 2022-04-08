@@ -227,6 +227,8 @@ public class QuickSearcher {
 		theResults = SettableValue.build(SearchResultNode.class).build();
 		theStatus = SettableValue.build(SearchStatus.class).withValue(SearchStatus.Idle).build();
 		theStatusMessage = SettableValue.build(String.class).withValue("Ready to search").build();
+		SettableValue<ObservableValue<BetterFile>> fileWrapper = SettableValue
+			.build((Class<ObservableValue<BetterFile>>) (Class<?>) SettableValue.class).build();
 		ObservableModelSet.ExternalModelSet extModels;
 		try {
 			extModels = ObservableModelSet.buildExternal(ObservableModelSet.JAVA_NAME_CHECKER)
@@ -240,7 +242,15 @@ public class QuickSearcher {
 						.with("searchAction", ModelTypes.Action.forType(Void.class), ObservableAction.of(TypeTokens.get().VOID, __ -> {
 							QommonsTimer.getCommonInstance().offload(QuickSearcher.this::doSearch);
 							return null;
-						}).disableWith(//
+						}).disableWith(ObservableValue.flatten(fileWrapper).map(file -> {
+							if (file == null) {
+								return "No Search root set";
+							} else if (!file.exists()) {
+								return file + " does not exist";
+							} else {
+								return null;
+							}
+						})).disableWith(//
 							theStatus.map(status -> status == SearchStatus.Canceling ? "Canceling..please wait" : null)))//
 				).build();
 		} catch (QonfigInterpretationException e) {
@@ -374,17 +384,16 @@ public class QuickSearcher {
 				} else if (canceled) {
 					theStatusMessage.set("Canceled search after " + QommonsUtils.printTimeLength(end - start), null);
 				} else {
-					StringBuilder str=new StringBuilder("Found ");
-					if(contentPattern!=null) {
+					StringBuilder str = new StringBuilder("Found ");
+					if (contentPattern != null) {
 						str.append(result.textMatches).append(" match").append(result.textMatches == 1 ? "" : "es").append(" in ")
-							.append(result.textMatchedFiles)
-							.append(" of ");
+							.append(result.textMatchedFiles).append(" of ");
 					}
 					str.append(result.matchingFiles).append(" matching file").append(result.matchingFiles == 1 ? "" : "s")//
 						.append(" among ").append(result.filesSearched).append(" file").append(result.filesSearched == 1 ? "" : "s")//
 						.append(" and ").append(result.directoriesSearched).append(" director")
 						.append(result.directoriesSearched == 1 ? "y" : "ies")//
-					.append(" in ").append(QommonsUtils.printTimeLength(end - start));
+						.append(" in ").append(QommonsUtils.printTimeLength(end - start));
 					theStatusMessage.set(str.toString(), null);
 				}
 			});
@@ -501,19 +510,7 @@ public class QuickSearcher {
 		return BetterPattern.compile(filePatternStr, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE);
 	}
 
-	private String testFileName(BetterFile file) {
-		String filePattern = theFileNamePattern.get();
-		if (filePattern == null) {
-			return null;
-		}
-		String filePath = file.getPath();
-		if (!filePath.endsWith("/") && file.isDirectory()) {
-			filePath += "/";
-		}
-		return testFileName(filePattern(filePattern, isFileNameCaseSensitive.get()), filePath) == null ? "File name does not match" : null;
-	}
-
-	private Match testFileName(BetterPattern filePattern, CharSequence path) {
+	private static Match testFileName(BetterPattern filePattern, CharSequence path) {
 		if (filePattern == null) {
 			return null;
 		}
@@ -553,7 +550,7 @@ public class QuickSearcher {
 					Matcher matcher = filePattern.matcher(StringUtils.cheapSubSequence(path, targetIdx + 1, path.length()));
 					found = matcher.matches();
 				} else {
-					found=null;
+					found = null;
 				}
 			}
 		} else {
@@ -611,23 +608,7 @@ public class QuickSearcher {
 		}
 	}
 
-	private String testFileContent(String content) {
-		if (content == null) {
-			return null;
-		}
-		String p = theFileContentPattern.get();
-		if (p == null) {
-			return null;
-		}
-		boolean caseSensitive = isFileContentCaseSensitive.get();
-		Matcher m = BetterPattern.compile(p, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE).matcher(content);
-		if (m.find() == null) {
-			return null;
-		}
-		return "No " + theFileContentPattern.get() + " match found";
-	}
-
-	private List<TextResult> testFileContent(Supplier<SearchResultNode> fileResult, BetterPattern contentPattern, BetterFile file,
+	private static List<TextResult> testFileContent(Supplier<SearchResultNode> fileResult, BetterPattern contentPattern, BetterFile file,
 		boolean searchMulti, FileContentSeq seq) {
 		List<TextResult> results = Collections.emptyList();
 		try (Reader reader = new BufferedReader(new InputStreamReader(file.read()))) {
@@ -662,10 +643,14 @@ public class QuickSearcher {
 		return results;
 	}
 
-	private TextResult makeTextResult(SearchResultNode fileResult, Match match, long position, long lineNumber, long columnNumber) {
+	private static TextResult makeTextResult(SearchResultNode fileResult, Match match, long position, long lineNumber, long columnNumber) {
 		return new TextResult(fileResult, position, lineNumber, columnNumber, match.toString(), match.getGroups());
 	}
 
+	/**
+	 * @param result The text result to render
+	 * @return The HTML text to render for the user showing the text match in the context of its sub-section of the rest of the file
+	 */
 	public static String renderTextResult(TextResult result) {
 		if (result == null) {
 			return null;
@@ -750,19 +735,14 @@ public class QuickSearcher {
 		BetterFile f = theCurrentSearch;
 		if (f != null) {
 			status = f.getPath();
+		} else if (theSearchBase.get() == null) {
+			status = "No search root set";
+		} else if (!theSearchBase.get().exists()) {
+			status = theSearchBase.get() + " does not exist";
 		} else {
 			status = getIdleStatus();
 		}
 		theStatusMessage.set(status, null);
-	}
-
-	private String getDisabledStatus() {
-		if (theSearchBase == null) {
-			return "Not initialized";
-		} else if (!theSearchBase.get().exists()) {
-			return theSearchBase.get() + " does not exist";
-		}
-		return null;
 	}
 
 	private String getIdleStatus() {
@@ -775,6 +755,10 @@ public class QuickSearcher {
 		}
 	}
 
+	/**
+	 * @param status Status of the search
+	 * @return Configurability disablement message for the application
+	 */
 	public static String isConfigurable(SearchStatus status) {
 		if (status == SearchStatus.Idle) {
 			return null;
@@ -783,10 +767,10 @@ public class QuickSearcher {
 		}
 	}
 
-	public static boolean isSearchClickable(SearchStatus status) {
-		return status != SearchStatus.Canceling;
-	}
-
+	/**
+	 * @param status Status of the search
+	 * @return The text to display for the search button
+	 */
 	public static String getSearchText(SearchStatus status) {
 		switch (status) {
 		case Idle:
