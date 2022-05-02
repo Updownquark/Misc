@@ -1274,6 +1274,11 @@ public class HypNotiQMain extends JPanel {
 	 *            Command-line arguments, ignored
 	 */
 	public static void main(String[] args) {
+		EventQueue.invokeLater(HypNotiQMain::launchApp);
+	}
+
+	/** Launches the HypNotiQ application */
+	public static void launchApp() {
 		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
 				.systemLandF()//
 				.disposeOnClose(false)//

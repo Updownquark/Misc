@@ -6,7 +6,7 @@
 	<property name="app.name" value="HypNotiQ" />
 	<property name="app.short.name" value="${app.name}" />
 	<property name="app.vendor" value="Updownquark" />
-	<property name="app.version" value="0.0.2" />
+	<property name="app.version" value="0.0.3" />
 	<property name="app.descrip" value="An app for keeping notes and setting reminders" />
 	<property name="main.class" value="org.quark.hypnotiq.HypNotiQMain"/>
 
@@ -22,7 +22,7 @@
             	<!--<attribute name="SplashScreen-Image" value="??.png"/>-->
             	<section name="org/quark/hypnotiq/">
 	            	<attribute name="Specification-Title" value="${app.name}" />
-            		<attribute name="Specification-Version" value="0.0.0" />
+            		<attribute name="Specification-Version" value="${app.version}" />
             		<attribute name="Specification-Vendor" value="${app.vendor}" />
             		<attribute name="Implementation-Title" value="org.quark.hypnotiq" />
             		<attribute name="Implementation-Version" value="${app.version}" />
@@ -30,10 +30,6 @@
             </manifest>
             <fileset dir="${dir.buildfile}/target/classes"/>
             <fileset dir="${dir.workspace}/Qommons/target/classes"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/log4j-1.2.16.jar"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/servlet-api.jar"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/hamcrest-core-1.3.jar"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/junit-4.11.jar"/>
             <fileset dir="${dir.workspace}/ObServe/target/classes"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/guava-18.0.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-core-4.2.jar"/>
