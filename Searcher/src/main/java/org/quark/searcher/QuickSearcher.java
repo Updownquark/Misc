@@ -257,9 +257,6 @@ public class QuickSearcher {
 			throw new IllegalStateException("Bad application configuration", e);
 		}
 
-		theStatusUpdateHandle = QommonsTimer.getCommonInstance().build(this::updateStatus, Duration.ofMillis(100), false).onEDT();
-		updateStatus();
-
 		try {
 			URL searcherFile = QuickSearcher.class.getResource("qommons-searcher.qml");
 			QuickDocument doc = new QuickX().configureInterpreter(//
@@ -277,6 +274,7 @@ public class QuickSearcher {
 			QuickUiDef ui = doc.createUI(extModels);
 			theSearchBase = doc.getHead().getModels().get("config.searchBase", ModelTypes.Value.forType(BetterFile.class))
 				.get(ui.getModels());
+			fileWrapper.set(theSearchBase, null);
 			theFileNamePattern = doc.getHead().getModels().get("config.fileNamePattern", ModelTypes.Value.forType(String.class))
 				.get(ui.getModels());
 			isFileNameRegex = doc.getHead().getModels().get("config.fileNameRegex", ModelTypes.Value.forType(boolean.class))
@@ -321,6 +319,9 @@ public class QuickSearcher {
 		} catch (IOException | QonfigParseException | QonfigInterpretationException | IllegalArgumentException e) {
 			throw new IllegalStateException(e);
 		}
+
+		theStatusUpdateHandle = QommonsTimer.getCommonInstance().build(this::updateStatus, Duration.ofMillis(100), false).onEDT();
+		updateStatus();
 	}
 
 	static class SearchResult {

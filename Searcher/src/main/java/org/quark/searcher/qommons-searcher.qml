@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <quick
+	uses:base="../../../../../../../ObServe/target/classes/org/observe/quick/quick-base.qtd"
 	uses:swing="../../../../../../../ObServe/target/classes/org/observe/quick/quick-swing.qtd"
+	uses:x="../../../../../../../ObServe/target/classes/org/observe/quick/quick-ext.qtd"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="Qommons Searcher"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
@@ -13,14 +15,13 @@
 		</imports>
 		<models>
 			<ext-model name="ext">
-				<ext-value name="workingDir" type="String" />
-				<ext-action name="searchAction" type="Void" />
-				<ext-value name="resultRoot" type="QuickSearcher.SearchResultNode" />
-				<ext-value name="status" type="QuickSearcher.SearchStatus" />
-				<ext-value name="statusText" type="String" />
+				<value name="workingDir" type="String" />
+				<action name="searchAction" type="Void" />
+				<value name="resultRoot" type="QuickSearcher.SearchResultNode" />
+				<value name="status" type="QuickSearcher.SearchStatus" />
+				<value name="statusText" type="String" />
 			</ext-model>
-			<config name="config" config-name="qommons-search">
-				<value name="zipLevel" type="int" default="10" config-path="zip-level" />
+			<model name="formats">
 				<file-source name="files" max-archive-depth="config.zipLevel">
 					<archive-method type="zip" />
 					<archive-method type="tar" />
@@ -31,23 +32,25 @@
 				<format name="byteFormat" type="double" sig-digs="4" unit="b" metric-prefixes-p2="true" />
 				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="Past" />
 				<simple-config-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" default="Maybe" />
-
+			</model>
+			<config name="config" config-name="qommons-search">
+				<value name="zipLevel" type="int" default="10" config-path="zip-level" />
 				<value name="x" type="int" />
 				<value name="y" type="int" />
 				<value name="width" type="int" />
 				<value name="height" type="int" />
-				<value name="searchBase" type="BetterFile" format="fileFormat" default="." />
-				<value name="fileNamePattern" type="String" format="patternFormat" />
+				<value name="searchBase" type="BetterFile" format="formats.fileFormat" default="." />
+				<value name="fileNamePattern" type="String" format="formats.patternFormat" />
 				<value name="fileNameRegex" type="boolean" default="true" />
 				<value name="fileNameCaseSensitive" type="boolean" default="false" />
-				<value name="fileTextPattern" type="String" format="patternFormat" />
+				<value name="fileTextPattern" type="String" format="formats.patternFormat" />
 				<value name="fileTextRegex" type="boolean" default="true" />
 				<value name="fileTextCaseSensitive" type="boolean" default="false" />
 				<value name="multiContentMatches" type="boolean" default="true" />
 				<value name="maxFileMatchLength" type="int" default="10000" />
 				<value-set name="excludedFileNames" type="org.quark.searcher.PatternConfig" />
 				<map name="fileRequirements" key-type="org.qommons.io.BetterFile.FileBooleanAttribute"
-					type="org.quark.searcher.FileAttributeRequirement" format="fileReqFormat" />
+					type="org.quark.searcher.FileAttributeRequirement" format="formats.fileReqFormat" />
 				<value name="minSize" type="double" default="0" />
 				<value name="maxSize" type="double" default="${QuickSearcher.DEFAULT_MAX_SIZE}" />
 				<value name="minLM" type="java.time.Instant" default="Jan 01 1900 12:00am" />
@@ -79,7 +82,7 @@
 		<split orientation="horizontal" split-position="${config.mainSplitDiv + &quot;%&quot;}">
 			<field-panel>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="Search In:" fill="true">
-					<text-field value="config.searchBase" format="config.fileFormat" disable-with="app.configurable" columns="100"
+					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.configurable" columns="100"
 						tooltip="Root folder or file to search in" />
 					<file-button open="true" value="config.searchBase" disable-with="app.configurable"
 						tooltip="Root folder or file to search in" />
@@ -89,7 +92,7 @@
 					<label>----File Name----</label>
 				</box>
 				<box field-name="File Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
-					<text-field value="config.fileNamePattern" format="config.patternFormat" disable-with="app.configurable"
+					<text-field value="config.fileNamePattern" format="formats.patternFormat" disable-with="app.configurable"
 						commit-on-type="true" tooltip="Pattern of file names to search for" />
 					<check-box value="config.fileNameRegex" disable-with="app.configurable"
 						tooltip="Whether the file pattern is evaluated as a regular expression">Regex:</check-box>
@@ -103,7 +106,7 @@
 						<transform name="testFilePath" source="_testFilePath">
 							<refresh on="config.fileNamePattern" />
 						</transform>
-						<format name="fileNamePatternFormat" type="file" file-source="config.files" working-dir="ext.workingDir">
+						<format name="fileNamePatternFormat" type="file" file-source="formats.files" working-dir="ext.workingDir">
 							<validate type="regex-validation" pattern="config.fileNamePattern" />
 						</format>
 					</model>
@@ -119,20 +122,20 @@
 				<box field-name="Text Pattern:" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<model>
 						<first-value name="textPatternModEnabled">
-							<value>app.configurable</value>
-							<value>config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? &quot;No Text Pattern set&quot;"</value>
+							<value>${app.configurable}</value>
+							<value>${config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? &quot;No Text Pattern set&quot; : null}</value>
 						</first-value>
 					</model>
-					<text-field value="config.fileTextPattern" format="config.patternFormat" disable-with="app.configurable"
+					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.configurable"
 						commit-on-type="true" tooltip="Text to search for in matching files" />
 					<check-box value="config.fileTextRegex" disable-with="textPatternModEnabled"
 						tooltip="Whether the file content pattern is evaluated as a regular expression">Regex:</check-box>
 					<check-box value="config.fileTextCaseSensitive" disable-with="textPatternModEnabled"
 						tooltip="Whether the text pattern is evaluated case-sensitively">Case:</check-box>
 				</box>
-				<box field-name="Test Text:" layout="border" fill="true"
-					visible="config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty() &amp; config.fileTextRegex">
+				<box field-name="Test Text:" layout="border" fill="true" visible="isTextFiltered">
 					<model>
+						<value name="isTextFiltered">${config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty() &amp; config.fileTextRegex}</value>
 						<value name="_testFileContent" type="String" />
 						<transform name="testFileContent" source="_testFileContent">
 							<refresh on="config.fileTextPattern" />
@@ -167,15 +170,15 @@
 							tooltip="Whether matching files may/must/cannot be hidden" />
 						<box field-name="Size:" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="Size range for matching files">
-							<text-field value="config.minSize" format="config.byteFormat" disable-with="app.configurable" />
+							<text-field value="config.minSize" format="formats.byteFormat" disable-with="app.configurable" />
 							<label>...</label>
-							<text-field value="config.maxSize" format="config.byteFormat" disable-with="app.configurable" />
+							<text-field value="config.maxSize" format="formats.byteFormat" disable-with="app.configurable" />
 						</box>
 						<box field-name="Last Modified:" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="Last modified date range for matching files">
-							<text-field value="config.minLM" format="config.timeFormat" disable-with="app.configurable" columns="100" />
+							<text-field value="config.minLM" format="formats.timeFormat" disable-with="app.configurable" columns="100" />
 							<label>...</label>
-							<text-field value="config.maxLM" format="config.timeFormat" disable-with="app.configurable" columns="100" />
+							<text-field value="config.maxLM" format="formats.timeFormat" disable-with="app.configurable" columns="100" />
 						</box>
 					</field-panel>
 				</collapse-pane>
@@ -184,7 +187,7 @@
 					<titled-border title="Exclude Files" />
 					<column name="Pattern" value="row.getPattern()">
 						<column-edit type="modify-row-value" edit-value-name="pattern" commit="row.setPattern(pattern)">
-							<text-field format="config.patternFormat" />
+							<text-field format="formats.patternFormat" />
 						</column-edit>
 					</column>
 					<column name="Case" value="row.isCaseSensitive()">
@@ -200,7 +203,7 @@
 				</table>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
-					<button action="ext.searchAction" text="app.searchText" />
+					<button action="ext.searchAction">${app.searchText}</button>
 				</box>
 			</field-panel>
 			<split orientation="vertical" split-position="${config.rightSplitDiv + &quot;%&quot;}">
@@ -212,8 +215,10 @@
 							icon="&quot;icons/icons8-&quot;+(node.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
 					</column>
 				</tree>
-				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
-					<!-- visible should really be ""app.selectedResult!=null &amp;&amp; !app.textMatches.isEmpty()" -->
+				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify" visible="isTextFiltered">
+					<model>
+						<value name="isTextFiltered">${config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty() &amp; config.fileTextRegex}</value>
+					</model>
 					<label value="&quot;Text Matches In &quot;+app.selectedResult.getFile().getPath()"
 						visible="app.selectedResult!=null"/>
 					<table rows="app.textMatches" selection="app.selectedTextMatch" value-name="row" render-value-name="col">
