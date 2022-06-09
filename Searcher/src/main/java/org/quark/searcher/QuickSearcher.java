@@ -21,11 +21,11 @@ import org.observe.SettableValue;
 import org.observe.assoc.ObservableMap;
 import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedSet;
-import org.observe.expresso.ExpressoInterpreter;
 import org.observe.expresso.ModelTypes;
 import org.observe.expresso.ObservableModelSet;
-import org.observe.quick.QuickBase;
 import org.observe.quick.QuickDocument;
+import org.observe.quick.QuickInterpreter;
+import org.observe.quick.QuickInterpreter.QuickSession;
 import org.observe.quick.QuickSwing;
 import org.observe.quick.QuickUiDef;
 import org.observe.quick.QuickX;
@@ -259,12 +259,10 @@ public class QuickSearcher {
 
 		try {
 			URL searcherFile = QuickSearcher.class.getResource("qommons-searcher.qml");
-			QuickDocument doc = new QuickX().configureInterpreter(//
-				new QuickSwing().configureInterpreter(ExpressoInterpreter.build(getClass(), //
-					QuickBase.BASE.get(), //
-					QuickSwing.SWING.get(), //
-					QuickX.EXT.get())//
-				)).build()//
+			QuickInterpreter<?> quickInterp = QuickInterpreter.build(getClass(), QuickX.EXT.get(), QuickSwing.SWING.get())//
+				.configure(new QuickSwing<QuickSession<?>>(), new QuickX<QuickSession<?>>())
+				.build();
+			QuickDocument doc = quickInterp//
 				.interpret(new DefaultQonfigParser()//
 					.withToolkit(QuickSwing.BASE.get(), //
 						QuickSwing.SWING.get(), //
