@@ -184,7 +184,9 @@
 				</collapse-pane>
 				<spacer length="3" />
 				<table rows="config.excludedFileNames" fill="true" value-name="row" render-value-name="col">
-					<titled-border title="`Exclude Files`" />
+					<titled-border title="`Exclude Files`">
+						<style attr="border-color" condition="config.multiContentMatches">`blue`</style>
+					</titled-border>
 					<column name="Pattern" value="row.getPattern()">
 						<column-edit type="modify-row-value" edit-value-name="pattern" commit="row.setPattern(pattern)">
 							<text-field format="formats.patternFormat" />
