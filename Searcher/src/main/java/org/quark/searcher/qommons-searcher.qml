@@ -77,6 +77,11 @@
 				</transform>
 			</model>
 		</models>
+		<style-sheet>
+			<style role-path="table.border">
+				<style attr="thickness" condition="config.fileNameCaseSensitive">2</style>
+			</style>
+		</style-sheet>
 	</head>
 	<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
 		<split orientation="horizontal" split-position="${config.mainSplitDiv + &quot;%&quot;}">
