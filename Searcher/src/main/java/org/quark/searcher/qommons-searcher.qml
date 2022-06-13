@@ -191,6 +191,8 @@
 				<table rows="config.excludedFileNames" fill="true" value-name="row" render-value-name="col">
 					<titled-border title="`Exclude Files`">
 						<style attr="border-color" condition="config.multiContentMatches">`blue`</style>
+						<style attr="font-weight" condition="config.fileNameCaseSensitive">`bold`</style>
+						<style attr="font-slant" condition="config.fileTextCaseSensitive">`italic`</style>
 					</titled-border>
 					<column name="Pattern" value="row.getPattern()">
 						<column-edit type="modify-row-value" edit-value-name="pattern" commit="row.setPattern(pattern)">
