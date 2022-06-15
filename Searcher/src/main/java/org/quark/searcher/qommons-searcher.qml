@@ -132,7 +132,9 @@
 						</first-value>
 					</model>
 					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.configurable"
-						commit-on-type="true" tooltip="`Text to search for in matching files`" />
+						commit-on-type="true" tooltip="`Text to search for in matching files`">
+						<style attr="color" condition="focused">`green`</style>
+					</text-field>
 					<check-box value="config.fileTextRegex" disable-with="textPatternModEnabled"
 						tooltip="`Whether the file content pattern is evaluated as a regular expression`">`Regex:`</check-box>
 					<check-box value="config.fileTextCaseSensitive" disable-with="textPatternModEnabled"
@@ -193,6 +195,7 @@
 						<style attr="border-color" condition="config.multiContentMatches">`blue`</style>
 						<style attr="font-weight" condition="config.fileNameCaseSensitive">`bold`</style>
 						<style attr="font-slant" condition="config.fileTextCaseSensitive">`italic`</style>
+						<style attr="border-color" condition="hovered">`green`</style>
 					</titled-border>
 					<column name="Pattern" value="row.getPattern()">
 						<column-edit type="modify-row-value" edit-value-name="pattern" commit="row.setPattern(pattern)">
