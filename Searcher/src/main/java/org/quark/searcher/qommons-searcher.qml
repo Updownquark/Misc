@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<quick
-	uses:base="../../../../../../../ObServe/target/classes/org/observe/quick/quick-base.qtd"
-	uses:swing="../../../../../../../ObServe/target/classes/org/observe/quick/quick-swing.qtd"
-	uses:x="../../../../../../../ObServe/target/classes/org/observe/quick/quick-ext.qtd"
+<quick uses:base="Quick-Base" uses:swing="Quick-Swing" uses:x="Quick-X"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="`Qommons Searcher`"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
