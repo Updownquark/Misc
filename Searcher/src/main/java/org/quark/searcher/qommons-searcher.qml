@@ -78,6 +78,7 @@
 			</model>
 		</models>
 		<style-sheet>
+			<import-style-sheet name="searcher" ref="qommons-searcher.qss" />
 			<style role-path="table.border">
 				<style attr="thickness" condition="config.fileNameCaseSensitive">2</style>
 			</style>
@@ -133,7 +134,7 @@
 					</model>
 					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.configurable"
 						commit-on-type="true" tooltip="`Text to search for in matching files`">
-						<style attr="color" condition="focused">`green`</style>
+						<style attr="color" condition="hovered">`green`</style>
 					</text-field>
 					<check-box value="config.fileTextRegex" disable-with="textPatternModEnabled"
 						tooltip="`Whether the file content pattern is evaluated as a regular expression`">`Regex:`</check-box>

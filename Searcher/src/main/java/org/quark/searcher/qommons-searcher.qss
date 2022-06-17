@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<style-sheet
+	uses:base="../../../../../../../ObServe/target/classes/org/observe/quick/quick-base.qtd">
+	<style element="renderer-value-override">
+		<style condition="selected">
+			<style attr="color">`lime-green`</style>
+		</style>
+	</style>
+</style-sheet>
