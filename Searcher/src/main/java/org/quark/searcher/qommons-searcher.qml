@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<quick uses:base="Quick-Base" uses:swing="Quick-Swing" uses:x="Quick-X"
+<quick uses:base="Quick-Base v0.1" uses:swing="Quick-Swing v0.1" uses:x="Quick-X v0.1"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="`Qommons Searcher`"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
@@ -120,7 +120,10 @@
 				</box>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
-					<label>----File Content----</label>
+					<label>
+						<style attr="font-color" condition="rightPressed">`red`</style>
+						----File Content----
+					</label>
 				</box>
 				<box field-name="`Text Pattern:`" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<model>
