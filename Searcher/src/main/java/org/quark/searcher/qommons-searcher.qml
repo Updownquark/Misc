@@ -76,8 +76,10 @@
 		</models>
 		<style-sheet>
 			<import-style-sheet name="searcher" ref="qommons-searcher.qss" />
-			<style role-path="table.border">
-				<style attr="thickness" condition="config.fileNameCaseSensitive">2</style>
+			<style element="table">
+				<style child="border">
+					<style attr="thickness" condition="config.fileNameCaseSensitive">2</style>
+				</style>
 			</style>
 		</style-sheet>
 	</head>
