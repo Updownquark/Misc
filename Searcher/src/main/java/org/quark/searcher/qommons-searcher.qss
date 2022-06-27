@@ -6,4 +6,13 @@
 			<style attr="color">`lime-green`</style>
 		</style>
 	</style>
+	<style element="field-panel" condition="pressed">
+		<style child="content" element="box">
+			<style child="content" element="text-field">
+				<style attr="color">`light-blue`</style>
+				<style condition="error!=null" attr="color">`light-green`</style>
+				<style condition="error==null" attr="color">`orange`</style>
+			</style>
+		</style>
+	</style>
 </style-sheet>
