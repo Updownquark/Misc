@@ -190,7 +190,14 @@ public class QuickSearcher {
 	 */
 	public static void main(String... args) {
 		String workingDir = System.getProperty("user.dir");
-		EventQueue.invokeLater(() -> new QuickSearcher(workingDir));
+		EventQueue.invokeLater(() ->{
+			try {
+				new QuickSearcher(workingDir);
+			} catch(RuntimeException e) {
+				e.printStackTrace();
+				System.exit(1);
+			}
+		});
 	}
 
 	private final SettableValue<SearchResultNode> theResults;
