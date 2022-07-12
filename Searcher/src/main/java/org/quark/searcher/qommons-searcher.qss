@@ -5,6 +5,9 @@
 		<style condition="selected">
 			<style attr="color">`lime-green`</style>
 		</style>
+		<style condition="hovered">
+			<style attr="color">`green`</style>
+		</style>
 	</style>
 	<style element="field-panel" condition="pressed">
 		<style child="content" element="box">

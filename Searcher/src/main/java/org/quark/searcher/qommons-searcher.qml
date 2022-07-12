@@ -87,7 +87,7 @@
 		<split orientation="horizontal" split-position="${config.mainSplitDiv + &quot;%&quot;}">
 			<field-panel>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="`Search In:`" fill="true">
-					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.configurable" columns="100"
+					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.configurable" columns="50"
 						tooltip="`Root folder or file to search in`" />
 					<file-button open="true" value="config.searchBase" disable-with="app.configurable"
 						tooltip="`Root folder or file to search in`" />
@@ -186,9 +186,9 @@
 						</box>
 						<box field-name="`Last Modified:`" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="`Last modified date range for matching files`">
-							<text-field value="config.minLM" format="formats.timeFormat" disable-with="app.configurable" columns="100" />
+							<text-field value="config.minLM" format="formats.timeFormat" disable-with="app.configurable" columns="20" />
 							<label>...</label>
-							<text-field value="config.maxLM" format="formats.timeFormat" disable-with="app.configurable" columns="100" />
+							<text-field value="config.maxLM" format="formats.timeFormat" disable-with="app.configurable" columns="20" />
 						</box>
 					</field-panel>
 				</collapse-pane>
