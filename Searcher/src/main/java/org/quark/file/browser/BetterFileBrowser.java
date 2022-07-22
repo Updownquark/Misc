@@ -94,7 +94,8 @@ public class BetterFileBrowser extends JPanel {
 											m -> m.asText(SpinnerFormat.flexDate(Instant::now, "EEE d MMM yyyy", null))))//
 									.withColumn("Size", long.class, BetterFile::length,
 											col -> col.withWidths(20, 50, 100)
-													.formatText(sz -> sz < 0 ? "?" : SIZE_FORMAT.format(sz * 1.0)))//
+								.formatText(sz -> sz < 0 ? "?" : SIZE_FORMAT.format(sz * 1.0))//
+								.withValueTooltip((f, sz) -> Format.LONG.withGroupingSeparator(',').format(sz)))//
 									.withSelection(selectedFile, false);
 						})).lastV(splitBottom -> splitBottom.fill().fillV().addComponent(null, new FileContentViewer(selectedFile),
 								f -> f.fill().fillV())));
