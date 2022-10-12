@@ -543,7 +543,7 @@ public class Finance extends JPanel {
 									comp -> comp.fill().fillV().visibleWhen(selectedGroup.map(group -> group != null)))//
 							)//
 					))//
-				.lastH(new BorderLayout(), p -> p//
+				.lastH(new JustifiedBoxLayout(true).mainJustified().crossJustified(), p -> p//
 					.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), p3 -> p3.fill()//
 						.addTextField("Start:", theStart, SpinnerFormat.flexDate(theStart, "MMM dd, yyyy", null), null)//
 						.addTextField("End:", theEnd, SpinnerFormat.flexDate(theEnd, "MMM dd, yyyy", null), null)//

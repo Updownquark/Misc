@@ -3,6 +3,7 @@ package org.quark.finance.logic;
 import java.awt.EventQueue;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +50,8 @@ public class PlanSimulation {
 		public final AssetGroup[] groups;
 
 		public final ObservableValue<Boolean> finished;
+
+		public final Instant[] frames;
 		public final long[][] fundBalances;
 		public final long[][] fundGroupBalances;
 		public final long[][][] fundProcessContributions;
@@ -58,25 +61,26 @@ public class PlanSimulation {
 		public final long[][] processGroupAmounts;
 		private ModelSetInstance models;
 
-		public SimulationResults(Plan plan, int frames, ObservableValue<Boolean> finished) {
+		public SimulationResults(Plan plan, Instant[] frames, ObservableValue<Boolean> finished) {
 			this.plan = plan;
 			this.finished = finished;
 			funds = plan.getFunds().getValues().toArray();
 			processes = plan.getProcesses().getValues().toArray();
 			groups = plan.getGroups().getValues().toArray();
 			processActions = new ProcessAction[processes.length][];
-			fundBalances = new long[plan.getFunds().getValues().size()][frames];
-			fundGroupBalances = new long[groups.length][frames];
-			fundProcessContributions = new long[funds.length][processes.length][frames];
-			processAmounts = new long[plan.getProcesses().getValues().size()][frames];
+			this.frames = frames;
+			fundBalances = new long[plan.getFunds().getValues().size()][frames.length];
+			fundGroupBalances = new long[groups.length][frames.length];
+			fundProcessContributions = new long[funds.length][processes.length][frames.length];
+			processAmounts = new long[plan.getProcesses().getValues().size()][frames.length];
 			processActionAmounts = new long[processAmounts.length][][];
 			int p = 0;
 			for (Process process : processes) {
 				processActions[p] = process.getActions().getValues().toArray();
-				processActionAmounts[p] = new long[processActions[p].length][frames];
+				processActionAmounts[p] = new long[processActions[p].length][frames.length];
 				p++;
 			}
-			processGroupAmounts = new long[groups.length][frames];
+			processGroupAmounts = new long[groups.length][frames.length];
 		}
 
 		public ModelSetInstance getModels() {
@@ -91,7 +95,8 @@ public class PlanSimulation {
 		for (Instant frame = start; frame.compareTo(end) <= 0; frame = resolution.addTo(frame, zone)) {
 			frames.add(frame);
 		}
-		SimulationResults results = new SimulationResults(plan, frames.size(), finished);
+		SimulationResults results = new SimulationResults(plan, //
+			frames.toArray(new Instant[frames.size()]), finished);
 		if (start == null || end == null || plan.getCurrentDate() == null || plan.getCurrentDate().compareTo(end) >= 0) {
 			finished.set(true, null);
 			return results;
@@ -100,11 +105,11 @@ public class PlanSimulation {
 			finished.set(true, null);
 			return results;
 		}
-		QommonsTimer.getCommonInstance().offload(() -> populate(results, start, end, frames, env));
+		QommonsTimer.getCommonInstance().offload(() -> populate(results, start, end, env));
 		return results;
 	}
 
-	private static void populate(SimulationResults results, Instant start, Instant end, List<Instant> frames, ExpressoEnv env) {
+	private static void populate(SimulationResults results, Instant start, Instant end, ExpressoEnv env) {
 		Plan plan = results.plan;
 		// Initialize the models
 		ObservableModelSet.Builder modelBuilder = ObservableModelSet.build(ObservableModelSet.JAVA_NAME_CHECKER);
@@ -112,7 +117,7 @@ public class PlanSimulation {
 		modelBuilder.with("CurrentDate", ModelTypes.Value.forType(Instant.class),
 			msi -> SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(start).build());
 		modelBuilder.with("PlanStart", ModelTypes.Value.forType(Instant.class),
-			msi -> SettableValue.of(Instant.class, start, "PlanStart cannot be modified"));
+			msi -> SettableValue.of(Instant.class, plan.getCurrentDate(), "PlanStart cannot be modified"));
 		/* Here we populate the models with the variables and funds.
 		 * This part is pretty complicated here because:
 		 * * The variables and funds can all refer to each other in any order
@@ -197,19 +202,24 @@ public class PlanSimulation {
 		int frame;
 		Instant time = start;
 		if (plan.getCurrentDate().compareTo(start) > 0) {
-			frame = Collections.binarySearch(frames, plan.getCurrentDate());
+			frame = Arrays.binarySearch(results.frames, plan.getCurrentDate());
 			if (frame < 0) {
 				frame = -frame - 1;
 			}
-			time = frames.get(frame);
+			time = results.frames[frame];
 		} else {
 			frame = 0;
+		}
+		for (int f = 0; f < results.funds.length; f++) {
+			if (results.funds[f].isDumpedAfterFrame()) {
+				fundBalances.get(results.funds[f].getName()).set(new Money(0), null);
+			}
 		}
 
 		int initFrame = frame;
 		// Run the simulation
-		for (; frame < frames.size(); frame++) {
-			time = frames.get(frame);
+		for (; frame < results.frames.length; frame++) {
+			time = results.frames[frame];
 			if (DEBUG) {
 				System.out.println("Frame " + frame + ": " + QommonsUtils.print(time.toEpochMilli()));
 			}
@@ -256,14 +266,14 @@ public class PlanSimulation {
 		}
 		for (int f = 0; f < fundGroups.length; f++) {
 			for (int g : fundGroups[f]) {
-				for (frame = initFrame; frame < frames.size(); frame++) {
+				for (frame = initFrame; frame < results.frames.length; frame++) {
 					results.fundGroupBalances[g][frame] += results.fundBalances[f][frame];
 				}
 			}
 		}
 		for (int p = 0; p < processGroups.length; p++) {
 			for (int g : processGroups[p]) {
-				for (frame = initFrame; frame < frames.size(); frame++) {
+				for (frame = initFrame; frame < results.frames.length; frame++) {
 					results.processGroupAmounts[g][frame] += results.processAmounts[p][frame];
 				}
 			}
@@ -424,7 +434,11 @@ public class PlanSimulation {
 
 		@Override
 		public int compareTo(ProcessData o) {
-			return nextRun.compareTo(o.nextRun);
+			int comp = nextRun.compareTo(o.nextRun);
+			if (comp == 0) {
+				comp = Integer.compare(processIndex, o.processIndex);
+			}
+			return comp;
 		}
 
 		void addInto(CircularArrayList<ProcessData> sequence) {
@@ -432,13 +446,8 @@ public class PlanSimulation {
 				return;
 			}
 			int index = Collections.binarySearch(sequence, this);
-			if (index >= 0) {
-				while (index < sequence.size() - 1 && sequence.get(index).compareTo(this) == 0) {
-					index++;
-				}
-			} else {
-				index=-index-1;
-			}
+			// Should always be negative because the process index is distinct
+			index = -index - 1;
 			sequence.add(index, this);
 		}
 
@@ -453,7 +462,7 @@ public class PlanSimulation {
 			}
 
 			nextRun = process.getPeriod().addTo(nextRun, timeZone);
-			if (nextRun != null && end != null && nextRun.compareTo(end) > 0) {
+			if (end != null && nextRun.compareTo(end) > 0) {
 				nextRun = null;
 			}
 		}

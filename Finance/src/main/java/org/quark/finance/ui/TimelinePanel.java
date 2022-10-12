@@ -25,7 +25,6 @@ import org.observe.collect.ObservableCollection;
 import org.observe.expresso.ModelTypes;
 import org.qommons.ArrayUtils;
 import org.qommons.Colors;
-import org.qommons.LongList;
 import org.qommons.TimeUtils;
 import org.quark.finance.entities.Plan;
 import org.quark.finance.entities.PlanComponent;
@@ -54,12 +53,21 @@ public class TimelinePanel extends JPanel {
 		addMouseMotionListener(new MouseMotionListener() {
 			@Override
 			public void mouseMoved(MouseEvent e) {
+				if (theItems.isEmpty()) {
+					return;
+				}
 				Instant startV = theStart.get();
 				Instant endV = theEnd.get();
 				if (startV == null || endV == null) {
 					return;
 				}
-				Instant time = startV.plus(TimeUtils.multiply(TimeUtils.between(startV, endV), e.getX() * 1.0 / getWidth()));
+				Instant[] frames = theItems.getFirst().results.frames;
+				int frame = (int) ((e.getX() - getInsets().left) * 1.0f//
+					/ (getWidth() - getInsets().left - getInsets().right) * frames.length);
+				if (frame < 0 || frame >= frames.length) {
+					return;
+				}
+				Instant time = theItems.getFirst().results.frames[frame];
 				StringBuilder tooltip = new StringBuilder("<html>").append(DATE_FORMAT.format(Date.from(time)));
 				Set<SimulationResults> simResults = new LinkedHashSet<>();
 				long sum = 0;
@@ -68,11 +76,9 @@ public class TimelinePanel extends JPanel {
 					if (item.results.getModels() == null || !item.results.finished.get()) {
 						continue;
 					}
-					int frame;
 					if (item.values.length == 0 || item.component.getError() != null) {
 						continue;
 					}
-					frame = Math.round(e.getX() * 1.0f / getWidth() * item.values.length);
 					if (item.values[frame] == 0) {
 						continue;
 					}
@@ -154,11 +160,10 @@ public class TimelinePanel extends JPanel {
 					sumNeg += item.values[frame];
 				}
 			}
-			if (sumPos + sumNeg >= 0) {
-				if (sumPos > max) {
-					max = sumPos;
-				}
-			} else if (sumNeg < min) {
+			if (sumPos > max) {
+				max = sumPos;
+			}
+			if (sumNeg < min) {
 				min = sumNeg;
 			}
 		}
@@ -174,85 +179,54 @@ public class TimelinePanel extends JPanel {
 		int h = getHeight() - top - getInsets().bottom;
 		int zeroY = (int) Math.round(h * max * 1.0 / (max - min));
 		List<PlanItem> positive = new ArrayList<>(), negative = new ArrayList<>();
-		LongList posVals = new LongList(), negVals = new LongList();
 		int lastTotalY = -1;
-		for (int x = 0; x < w; x++) {
-			int frame = Math.min(Math.round(x * 1.0f / w * frames), frames - 1);
+		int x = 0;
+		int nextX = 1;
+		for (int frame = 0; x < w; frame++, x = nextX) {
+			int frameX = Math.max((int) (frame * 1.0f / frames * w), x + 1);
+			if (frameX == x) {
+				continue;
+			}
+			nextX = Math.max((int) ((frame + 1) * 1.0f / frames * w), x + 1);
 			// Sort the items into positive and negative contributions
 			positive.clear();
 			negative.clear();
-			posVals.clear();
-			negVals.clear();
 			long sumPos = 0, sumNeg = 0;
 			for (PlanItem item : items) {
 				if (item.values[frame] > 0) {
 					positive.add(item);
 					sumPos += item.values[frame];
-					posVals.add(sumPos);
 				} else if (item.values[frame] < 0) {
 					negative.add(item);
 					sumNeg += item.values[frame];
-					negVals.add(sumNeg);
 				}
 			}
 
-			if (sumPos + sumNeg >= 0) {
-				PlanItem lastNeg = null;
-				int negIdx = negative.size();
-				int fromY = zeroY;
-				for (int p = 0; p < positive.size(); p++) {
-					PlanItem pos = positive.get(p);
-					long nextPos = posVals.get(p);
-					while (negIdx > 0 && sumPos + negVals.get(negIdx - 1) < nextPos) {
-						int toY = getY(sumPos + negVals.get(negIdx - 1), min, max, h);
-						if (lastNeg == null) {
-							drawOverlapping(g, Arrays.asList(pos), x, fromY, toY);
-						} else {
-							drawOverlapping(g, Arrays.asList(pos, lastNeg), x, fromY, toY);
-						}
-						negIdx--;
-						lastNeg = negative.get(negIdx);
-						fromY = toY;
-					}
-					int toY = getY(nextPos, min, max, h);
-					if (lastNeg == null) {
-						drawOverlapping(g, Arrays.asList(pos), x, fromY, toY);
-					} else {
-						drawOverlapping(g, Arrays.asList(pos, lastNeg), x, fromY, toY);
-					}
-					fromY = toY;
-				}
-			} else {
-				PlanItem lastPos = null;
-				int posIdx = positive.size();
-				int fromY = zeroY;
-				for (int negIdx = 0; negIdx < negative.size(); negIdx++) {
-					PlanItem neg = negative.get(negIdx);
-					long nextNeg = negVals.get(negIdx);
-					while (posIdx > 0 && sumNeg + posVals.get(posIdx - 1) > nextNeg) {
-						int toY = getY(sumNeg + posVals.get(posIdx - 1), min, max, h);
-						if (lastPos == null) {
-							drawOverlapping(g, Arrays.asList(neg), x, toY, fromY);
-						} else {
-							drawOverlapping(g, Arrays.asList(lastPos, neg), x, toY, fromY);
-						}
-						posIdx--;
-						lastPos = positive.get(posIdx);
-						fromY = toY;
-					}
-					int toY = getY(nextNeg, min, max, h);
-					if (lastPos == null) {
-						drawOverlapping(g, Arrays.asList(neg), x, toY, fromY);
-					} else {
-						drawOverlapping(g, Arrays.asList(lastPos, neg), x, toY, fromY);
-					}
-					fromY = toY;
-				}
+			int fromY = zeroY;
+			long value = 0;
+			for (PlanItem pos : positive) {
+				long nextVal = value + pos.values[frame];
+				int toY = getY(nextVal, min, max, h);
+				drawOverlapping(g, Arrays.asList(pos), x, nextX, fromY, toY);
+				value = nextVal;
+				fromY = toY;
 			}
+
+			fromY = zeroY;
+			value = 0;
+			for (PlanItem neg : negative) {
+				long nextVal = value + neg.values[frame];
+				int toY = getY(nextVal, min, max, h);
+				drawOverlapping(g, Arrays.asList(neg), x, nextX, toY, fromY);
+				value = nextVal;
+				fromY = toY;
+			}
+
 			int totalY = getY(sumPos + sumNeg, min, max, h);
+			g.setColor(Color.black);
+			g.drawLine(left + x, top + totalY, left + nextX, top + totalY);
 			if (x > 0) {
-				g.setColor(Color.black);
-				g.drawLine(left + x - 1, top + lastTotalY, left + x, top + totalY);
+				g.drawLine(left + x, top + lastTotalY, left + x, top + totalY);
 			}
 			lastTotalY = totalY;
 		}
@@ -285,11 +259,18 @@ public class TimelinePanel extends JPanel {
 		int h = getHeight() - top - getInsets().bottom;
 		int zeroY = (int) Math.round(h * max * 1.0 / (max - min));
 		int frames = items.get(0).values.length;
-		for (int x = 0; x < w; x++) {
+		int x = 0;
+		int nextX = 1;
+		for (int frame = 0; x < w; frame++, x = nextX) {
+			int frameX = Math.max((int) (frame * 1.0f / frames * w), x + 1);
+			if (frameX == x) {
+				continue;
+			}
+			nextX = Math.max((int) ((frame + 1) * 1.0f / frames * w), x + 1);
 			// Sort the items by current balance/amount
-			int frame = Math.min(Math.round(x * 1.0f / w * frames), frames - 1);
-			Collections.sort(items, (i1, i2) -> Long.compare(i1.values[frame], i2.values[frame]));
-			int zeroIndex = ArrayUtils.binarySearch(items, item -> Long.compare(0L, item.values[frame]));
+			int fFrame = frame;
+			Collections.sort(items, (i1, i2) -> Long.compare(i1.values[fFrame], i2.values[fFrame]));
+			int zeroIndex = ArrayUtils.binarySearch(items, item -> Long.compare(0L, item.values[fFrame]));
 			if (zeroIndex == -1) {
 				zeroIndex = 0;
 			} else if (zeroIndex < 0) {
@@ -299,14 +280,14 @@ public class TimelinePanel extends JPanel {
 			for (int i = zeroIndex; i > 0; i--) {
 				List<PlanItem> subItems = items.subList(0, i);
 				int toY = getY(subItems.get(i - 1).values[frame], min, max, h);
-				drawOverlapping(g, subItems, x, toY, fromY);
+				drawOverlapping(g, subItems, x, nextX, toY, fromY);
 				fromY = toY;
 			}
 			fromY = zeroY;
 			for (int i = zeroIndex; i < items.size(); i++) {
 				List<PlanItem> subItems = items.subList(i, items.size());
 				int toY = getY(items.get(i).values[frame], min, max, h);
-				drawOverlapping(g, subItems, x, fromY, toY);
+				drawOverlapping(g, subItems, x, nextX, fromY, toY);
 				fromY = toY;
 			}
 		}
@@ -318,34 +299,36 @@ public class TimelinePanel extends JPanel {
 		return h - Math.round((value - min) * 1.0f * h / (max - min));
 	}
 
-	private void drawOverlapping(Graphics2D g, List<PlanItem> subItems, int x, int fromY, int toY) {
+	private void drawOverlapping(Graphics2D g, List<PlanItem> subItems, int fromX, int toX, int fromY, int toY) {
 		if (fromY > toY) {
 			int temp = fromY;
 			fromY = toY;
 			toY = temp;
 		}
-		for (int y = fromY; y < toY; y++) {
-			int itemIdx = (x / 3 + y / 3) % subItems.size();
-			if (itemIdx < 0) {
-				itemIdx += subItems.size();
-			}
-			PlanItem item = subItems.get(itemIdx);
-			Plan plan = item.component.getPlan();
-			Color color = item.contributor != null ? item.contributor.getColor() : item.component.getColor();
-			if (color == null) {
-				color = Color.black;
-			}
-			if (plan.getStippleDotLength() < plan.getStippleLength()) {
-				boolean stipple = ((x + y) % plan.getStippleLength() + 1) < plan.getStippleDotLength();
-				if (!stipple) {
-					g.setColor(Color.black);
+		for (int x = fromX; x < toX; x++) {
+			for (int y = fromY; y < toY; y++) {
+				int itemIdx = (x / 3 + y / 3) % subItems.size();
+				if (itemIdx < 0) {
+					itemIdx += subItems.size();
+				}
+				PlanItem item = subItems.get(itemIdx);
+				Plan plan = item.component.getPlan();
+				Color color = item.contributor != null ? item.contributor.getColor() : item.component.getColor();
+				if (color == null) {
+					color = Color.black;
+				}
+				if (plan.getStippleDotLength() < plan.getStippleLength()) {
+					boolean stipple = ((x + y) % plan.getStippleLength() + 1) < plan.getStippleDotLength();
+					if (!stipple) {
+						g.setColor(Color.black);
+					} else {
+						g.setColor(color);
+					}
 				} else {
 					g.setColor(color);
 				}
-			} else {
-				g.setColor(color);
+				g.drawRect(getInsets().left + x, getInsets().top + y, 1, 1);
 			}
-			g.drawRect(getInsets().left + x, getInsets().top + y, 1, 1);
 		}
 	}
 

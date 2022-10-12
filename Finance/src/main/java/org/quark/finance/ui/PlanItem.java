@@ -20,6 +20,10 @@ public class PlanItem {
 
 	@Override
 	public String toString() {
-		return component.toString();
+		if (contributor != null) {
+			return contributor+"->"+component;
+		} else {
+			return component.toString();
+		}
 	}
 }
