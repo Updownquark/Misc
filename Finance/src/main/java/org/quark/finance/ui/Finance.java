@@ -7,6 +7,7 @@ import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -32,13 +33,14 @@ import org.observe.config.ObservableValueSet;
 import org.observe.config.ValueOperationException;
 import org.observe.expresso.ClassView;
 import org.observe.expresso.ExpressoEnv;
-import org.observe.expresso.ExpressoParser;
 import org.observe.expresso.JavaExpressoParser;
 import org.observe.expresso.NonStructuredParser;
 import org.observe.expresso.ObservableExpression;
+import org.observe.expresso.ObservableModelSet;
 import org.observe.expresso.ops.BinaryOperatorSet;
 import org.observe.expresso.ops.NameExpression;
 import org.observe.expresso.ops.UnaryOperatorSet;
+import org.observe.util.EntityReflector;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableCellRenderer;
@@ -158,7 +160,7 @@ public class Finance extends JPanel {
 				return TimeUtils.parseDuration(text, true, true);
 			}
 		}, () -> TimeUtils.flexDuration(1, DurationComponentType.Month)));
-		ExpressoParser configExpressionParser = new JavaExpressoParser();
+		ExpressionFormat expFormat = new ExpressionFormat(new JavaExpressoParser(), this, null, null, true);
 		formatSet.withFormat(TypeTokens.get().of(ObservableExpression.class), new ObservableConfigFormat<ObservableExpression>() {
 			@Override
 			public void format(ObservableConfigParseSession session, ObservableExpression value, ObservableExpression previousValue,
@@ -182,7 +184,7 @@ public class Finance extends JPanel {
 				if (cfg == null || cfg.getValue() == null) {
 					return null;
 				}
-				return configExpressionParser.parse(cfg.getValue());
+				return expFormat.parse(cfg.getValue());
 			}
 
 			@Override
@@ -699,7 +701,7 @@ public class Finance extends JPanel {
 					return null;
 				}
 			}))//
-			.withAction("Add", path -> {
+			.withAction(null, path -> {
 				try {
 					switch (((ComponentSetPlaceholder) path.getLast()).name) {
 					case "Plans":
@@ -756,10 +758,13 @@ public class Finance extends JPanel {
 				} else {
 					return null;
 				}
-			}, null))//
-			.withAction("Remove", path -> {
+			}, null)//
+				.displayAsButton(true).displayAsPopup(false).displayWhenDisabled(false)
+				.modifyButton(btn -> btn.withIcon(ObservableSwingUtils.class, "icons/add.png", 16, 16))//
+			)//
+			.withAction(null, path -> {
 				if (path.getLast() instanceof Plan) {
-					if (tree.alert("Delete Plan?",
+					if (!tree.alert("Delete Plan?",
 						"Are you sure you want to delete plan '" + ((Plan) path.getLast()).getName() + "'?" + "\nThis cannot be undone.")
 						.confirm(true)) {
 						return;
@@ -767,28 +772,28 @@ public class Finance extends JPanel {
 					thePlans.getValues().remove(path.getLast());
 				} else if (path.getLast() instanceof PlanVariable) {
 					PlanVariable vbl = (PlanVariable) path.getLast();
-					if (tree.alert("Delete Variable?", "Are you sure you want to delete variable '" + vbl.getName() + "' of plan "
+					if (!tree.alert("Delete Variable?", "Are you sure you want to delete variable '" + vbl.getName() + "' of plan "
 						+ vbl.getPlan().getName() + "?" + "\nThis cannot be undone.").confirm(true)) {
 						return;
 					}
 					vbl.getPlan().getVariables().getValues().remove(vbl);
 				} else if (path.getLast() instanceof Fund) {
 					Fund fund = (Fund) path.getLast();
-					if (tree.alert("Delete Fund?", "Are you sure you want to delete fund '" + fund.getName() + "' of plan "
+					if (!tree.alert("Delete Fund?", "Are you sure you want to delete fund '" + fund.getName() + "' of plan "
 						+ fund.getPlan().getName() + "?" + "\nThis cannot be undone.").confirm(true)) {
 						return;
 					}
 					fund.getPlan().getFunds().getValues().remove(fund);
 				} else if (path.getLast() instanceof Process) {
 					Process proc = (Process) path.getLast();
-					if (tree.alert("Delete Process?", "Are you sure you want to delete process '" + proc.getName() + "' of plan "
+					if (!tree.alert("Delete Process?", "Are you sure you want to delete process '" + proc.getName() + "' of plan "
 						+ proc.getPlan().getName() + "?" + "\nThis cannot be undone.").confirm(true)) {
 						return;
 					}
 					proc.getPlan().getProcesses().getValues().remove(proc);
 				} else if (path.getLast() instanceof AssetGroup) {
 					AssetGroup group = (AssetGroup) path.getLast();
-					if (tree.alert("Delete Group?", "Are you sure you want to delete group '" + group.getName() + "' of plan "
+					if (!tree.alert("Delete Group?", "Are you sure you want to delete group '" + group.getName() + "' of plan "
 						+ group.getPlan().getName() + "?" + "\nThis cannot be undone.").confirm(true)) {
 						return;
 					}
@@ -796,7 +801,10 @@ public class Finance extends JPanel {
 				}
 			}, action -> action.allowForEmpty(false).allowForMultiple(false).allowWhen(
 				path -> path.getLast() instanceof Plan || path.getLast() instanceof PlanComponent ? null : "Placeholder--cannot delete",
-				null))//
+				null)//
+				.displayAsButton(true).displayAsPopup(false).displayWhenDisabled(false)//
+				.modifyButton(btn -> btn.withIcon(ObservableSwingUtils.class, "icons/remove.png", 16, 16))//
+			)//
 			.withMultiAction("Move To Top", paths -> move(paths, true),
 				action -> action.allowForEmpty(false).allowForMultiple(true).allowWhenMulti(Finance::filterMove, null))//
 			.withMultiAction("Move To Bottom", paths -> move(paths, false),
@@ -1024,6 +1032,118 @@ public class Finance extends JPanel {
 			}
 		}
 		return exp;
+	}
+
+	public static <PC extends PlanComponent> void observeVariableName(ObservableValue<? extends PC> value) {
+		// When the name of a variable changes, refresh all fields that refer to it so the rendering is correct
+		value.changes().act(valueEvt -> {
+			PC comp = valueEvt.getNewValue();
+			if (comp == null) {
+				return;
+			}
+			SettableValue<String> nameVal = EntityReflector.observeField(comp, PlanComponent::getName);
+			nameVal.noInitChanges().takeUntil(value.noInitChanges().filter(evt -> evt.getOldValue() != evt.getNewValue())).act(nameEvt -> {
+				if (Objects.equals(nameEvt.getNewValue(), nameEvt.getOldValue())) {
+					return;
+				}
+				Object search;
+				if (comp instanceof ProcessVariable) {
+					search=((ProcessVariable) comp).getProcess();
+				} else {
+					search=comp.getPlan();
+				}
+				if (search != null) {
+					replaceEntity(search, comp);
+				}
+			});
+		});
+	}
+
+	public static void replaceEntity(Object search, PlanComponent comp) {
+		if (search instanceof Collection) {
+			for (Object element : ((Collection<?>) search)) {
+				replaceEntity(element, comp);
+			}
+		} else if (search instanceof Plan) {
+			Plan plan = (Plan) search;
+			replaceEntity(plan.getVariables().getValues(), comp);
+			replaceEntity(plan.getFunds().getValues(), comp);
+			replaceEntity(plan.getProcesses().getValues(), comp);
+		} else if (search instanceof PlanVariable) {
+			PlanVariable vbl = (PlanVariable) search;
+			if (hasEntity(vbl.getValue(), comp)) {
+				vbl.setValue(vbl.getValue());
+			}
+		} else if (search instanceof Fund) {
+			Fund fund = (Fund) search;
+			if (hasEntity(fund.getStartingBalance(), comp)) {
+				fund.setStartingBalance(fund.getStartingBalance());
+			}
+		} else if (search instanceof Process) {
+			Process proc = (Process) search;
+			if (hasEntity(proc.getStart(), comp)) {
+				proc.setStart(proc.getStart());
+			}
+			if (hasEntity(proc.getEnd(), comp)) {
+				proc.setEnd(proc.getEnd());
+			}
+			if (hasEntity(proc.getActive(), comp)) {
+				proc.setActive(proc.getActive());
+			}
+			replaceEntity(proc.getLocalVariables().getValues(), comp);
+			replaceEntity(proc.getActions().getValues(), comp);
+		} else if (search instanceof ProcessAction) {
+			ProcessAction action = (ProcessAction) search;
+			if (hasEntity(action.getAmount(), comp)) {
+				action.setAmount(action.getAmount());
+			}
+		}
+	}
+
+	private static boolean hasEntity(ObservableExpression exp, PlanComponent comp) {
+		if (exp == null) {
+			return false;
+		} else if (exp instanceof NamedEntityExpression && ((NamedEntityExpression<?>) exp).getEntity() == comp) {
+			return true;
+		}
+		for (ObservableExpression child : exp.getChildren()) {
+			if (hasEntity(child, comp)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public static String checkVariableName(String name, PlanComponent comp) {
+		if (name == null || name.isEmpty()) {
+			return "Name required";
+		}
+		try {
+			ObservableModelSet.JAVA_NAME_CHECKER.checkName(name);
+		} catch (IllegalArgumentException e) {
+			return e.getMessage();
+		}
+		if ("CurrentDate".equals(name) || "PlanStart".equals(name)) {
+			return "'" + name + "' is reserved";
+		}
+		for (PlanVariable vbl : comp.getPlan().getVariables().getValues()) {
+			if (vbl != comp && Objects.equals(name, vbl.getName())) {
+				return "A variable named '" + name + "' already exists in this plan";
+			}
+		}
+		for (Fund fund : comp.getPlan().getFunds().getValues()) {
+			if (fund != comp && Objects.equals(name, fund.getName())) {
+				return "A fund named '" + name + "' already exists in this plan";
+			}
+		}
+		if (comp instanceof ProcessVariable) {
+			for (ProcessVariable vbl : ((ProcessVariable) comp).getProcess().getLocalVariables().getValues()) {
+				if (vbl != comp && Objects.equals(name, vbl.getName())) {
+					return "A local variable named '" + name + "' already exists in this process";
+				}
+			}
+		}
+		return null;
 	}
 
 	public static void main(String... clArgs) {

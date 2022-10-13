@@ -15,8 +15,8 @@ import org.quark.finance.entities.PlanComponent;
 public abstract class PlanComponentEditor<E extends PlanComponent> extends PlanEntityEditor<E> {
 	private static final String COLOR_LABEL = "\u2588\u2588";
 
-	public PlanComponentEditor(ObservableValue<E> value, Consumer<PanelPopulator<?, ?>> postName) {
-		super(value, postName);
+	public PlanComponentEditor(ObservableValue<E> value, boolean identifier, Consumer<PanelPopulator<?, ?>> postName) {
+		super(value, identifier, postName);
 		ObservableValue<String> isShowable = isShowEnabled();
 		SettableValue<Boolean> shown = SettableValue.flatten(value//
 			.map(vbl -> vbl == null ? null : EntityReflector.observeField(vbl, PlanComponent::isShown)))//

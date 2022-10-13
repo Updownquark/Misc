@@ -1,11 +1,20 @@
 package org.quark.finance.logic;
 
-import org.observe.expresso.ops.NameExpression;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Function;
+
+import org.observe.expresso.ExpressoEnv;
+import org.observe.expresso.ModelType.ModelInstanceType;
+import org.observe.expresso.ObservableExpression;
+import org.observe.expresso.ObservableModelSet.ValueContainer;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterList;
+import org.qommons.config.QonfigInterpretationException;
 import org.quark.finance.entities.PlanComponent;
 
-public class NamedEntityExpression<E extends PlanComponent> extends NameExpression {
+import com.google.common.reflect.TypeToken;
+
+public class NamedEntityExpression<E extends PlanComponent> implements ObservableExpression {
 	private static final ThreadLocal<Boolean> PERSISTING = new ThreadLocal<>();
 
 	public static Transaction persist() {
@@ -21,13 +30,34 @@ public class NamedEntityExpression<E extends PlanComponent> extends NameExpressi
 	private final String thePersistencePrefix;
 
 	public NamedEntityExpression(E entity, String persistencePrefix) {
-		super(null, BetterList.of(entity.getName()));
 		theEntity = entity;
 		thePersistencePrefix = persistencePrefix;
 	}
 
 	public E getEntity() {
 		return theEntity;
+	}
+
+	@Override
+	public List<? extends ObservableExpression> getChildren() {
+		return Collections.emptyList();
+	}
+
+	@Override
+	public ObservableExpression replaceAll(Function<ObservableExpression, ? extends ObservableExpression> replace) {
+		return replace.apply(this);
+	}
+
+	@Override
+	public <M, MV extends M> ValueContainer<M, MV> evaluateInternal(ModelInstanceType<M, MV> type, ExpressoEnv env)
+		throws QonfigInterpretationException {
+		return env.getModels().get(theEntity.getName(), type);
+	}
+
+	@Override
+	public <P1, P2, P3, T> MethodFinder<P1, P2, P3, T> findMethod(TypeToken<T> targetType, ExpressoEnv env)
+		throws QonfigInterpretationException {
+		throw new QonfigInterpretationException("Named entity cannot be evaluated as a method");
 	}
 
 	@Override

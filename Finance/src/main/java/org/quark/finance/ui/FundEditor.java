@@ -1,12 +1,10 @@
 package org.quark.finance.ui;
 
 import java.awt.Color;
-import java.text.ParseException;
 
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
-import org.observe.expresso.ExpressoParser;
 import org.observe.expresso.JavaExpressoParser;
 import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet;
@@ -18,32 +16,20 @@ import org.quark.finance.entities.Plan;
 import org.quark.finance.entities.PlanVariable;
 import org.quark.finance.entities.Process;
 
+/** Editor UI for a fund */
 public class FundEditor extends PlanComponentEditor<Fund> {
+	/**
+	 * @param selectedFund The selected fund to edit
+	 * @param app The finance app
+	 */
 	public FundEditor(ObservableValue<Fund> selectedFund, Finance app) {
-		super(selectedFund, panel -> {
+		super(selectedFund, true, panel -> {
 			SettableValue<ObservableExpression> startingBalance = SettableValue.flatten(selectedFund//
 				.map(vbl -> vbl == null ? null : EntityReflector.observeField(vbl, Fund::getStartingBalance)));
 			SettableValue<Boolean> sink = SettableValue.flatten(selectedFund//
 				.map(vbl -> vbl == null ? null : EntityReflector.observeField(vbl, Fund::isDumpedAfterFrame)));
-			ExpressoParser parser = new JavaExpressoParser();
-			Format<ObservableExpression> expFormat = new Format<ObservableExpression>() {
-				@Override
-				public void append(StringBuilder text, ObservableExpression expression) {
-					if (expression != null) {
-						text.append(expression);
-					}
-				}
-
-				@Override
-				public ObservableExpression parse(CharSequence text) throws ParseException {
-					if (text.length() == 0) {
-						return null;
-					}
-					// TODO try to parse a simple monetary value first
-					return parser.parse(text.toString())//
-						.replaceAll(exp -> app.replacePlanComponents(exp, selectedFund.get().getPlan(), null, true));
-				}
-			};
+			ExpressionFormat expFormat = new ExpressionFormat(new JavaExpressoParser(), app, () -> selectedFund.get().getPlan(), null,
+				false).withTime(false).withDuration(false);
 			String noneGroup = "None";
 			ObservableValue<String> memberships = ObservableValue.flatten(selectedFund//
 				.map(fund -> fund == null ? null : fund.getMemberships().reduce(noneGroup, (str, g) -> {
@@ -62,6 +48,7 @@ public class FundEditor extends PlanComponentEditor<Fund> {
 				.addLabel("In Groups:", memberships, Format.TEXT, null)//
 			;
 		});
+		Finance.observeVariableName(selectedFund);
 		ObservableCollection<PlanItem> fund = app.getItemSimResults().flow()//
 			.refresh(selectedFund.noInitChanges())//
 			.filter(item -> item.component == selectedFund.get() && item.contributor == null ? null : "Not this fund")//
@@ -79,11 +66,6 @@ public class FundEditor extends PlanComponentEditor<Fund> {
 			.addComponent(null, new TimelinePanel(fundContributions, app.getStart(), app.getEnd(), true),
 				f -> f.fill().fillV().decorate(deco -> deco.withTitledBorder("Contributors", Color.black)))//
 		;
-		/*TODO Process contributions table:
-		 	* name (link)
-		 	* period
-		 	* contribution (amount)
-		 */
 	}
 
 	static boolean anyNonZero(long[] values) {

@@ -300,10 +300,25 @@ public class TimelinePanel extends JPanel {
 	}
 
 	private void drawOverlapping(Graphics2D g, List<PlanItem> subItems, int fromX, int toX, int fromY, int toY) {
+		if (subItems.isEmpty()) {
+			return;
+		}
 		if (fromY > toY) {
 			int temp = fromY;
 			fromY = toY;
 			toY = temp;
+		}
+		if (subItems.size() == 1) {
+			PlanItem item = subItems.get(0);
+			if (item.component.getPlan().getStippleDotLength() >= item.component.getPlan().getStippleLength()) {
+				Color color = item.contributor != null ? item.contributor.getColor() : item.component.getColor();
+				if (color == null) {
+					color = Color.black;
+				}
+				g.setColor(color);
+				g.fillRect(getInsets().left + fromX, getInsets().top + fromY, toX - fromX, toY - fromY);
+				return;
+			}
 		}
 		for (int x = fromX; x < toX; x++) {
 			for (int y = fromY; y < toY; y++) {

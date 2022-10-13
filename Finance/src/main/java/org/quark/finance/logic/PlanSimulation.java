@@ -174,19 +174,11 @@ public class PlanSimulation {
 			String message = null;
 			if (process.getPeriod() == null) {
 				message = "No period set";
-			} else if (results.processActions[p].length == 0) {
-				message = "No process actions";
 			}
 			if (message == null) {
-				ProcessData data;
-				try {
-					data = new ProcessData(process, results.processActions[p], env, msi, timeZone, components, visited);
-					data.addInto(sequence);
-				} catch (QonfigInterpretationException e) {
-					message = e.getMessage();
-				}
-			}
-			if (!Objects.equals(message, process.getError())) {
+				ProcessData data = new ProcessData(process, results.processActions[p], env, msi, timeZone, components, visited);
+				data.addInto(sequence);
+			} else if (!message.equals(process.getError())) {
 				String fMsg = message;
 				ObservableSwingUtils.onEQ(() -> process.setError(fMsg));
 			}
@@ -394,19 +386,25 @@ public class PlanSimulation {
 		final Instant end;
 
 		ProcessData(Process process, ProcessAction[] actions, ExpressoEnv env, ModelSetInstance msi, TimeZone timeZone,
-			Map<String, PlanComponent> components,
-			Map<String, String> visited) throws QonfigInterpretationException {
+			Map<String, PlanComponent> components, Map<String, String> visited) {
 			this.process = process;
 			processIndex = process.getPlan().getProcesses().getValues().indexOf(process);
 			this.actions = new ProcessActionData[actions.length];
 			components = new HashMap<>(components);
 			visited = new HashMap<>(visited);
+			List<String> lvErrors = null, actionErrors = null;
 			if (!process.getLocalVariables().getValues().isEmpty()) {
 				ObservableModelSet.WrappedBuilder modelBuilder = msi.getModel().wrap();
 				env = env.with(modelBuilder, null);
 				BetterSet<PlanComponent> vblPath = BetterHashSet.build().build();
 				for (PlanVariable vbl : process.getLocalVariables().getValues()) {
 					install(vbl, modelBuilder, vblPath, visited, components, null, env);
+					if (vbl.getError() != null) {
+						if (lvErrors == null) {
+							lvErrors = new ArrayList<>();
+						}
+						lvErrors.add(vbl.getName());
+					}
 				}
 				ObservableModelSet.Wrapped wrapped = modelBuilder.build();
 				env = env.with(wrapped, null);
@@ -414,14 +412,89 @@ public class PlanSimulation {
 			}
 			for (int a = 0; a < actions.length; a++) {
 				if (actions[a].getFund() != null && actions[a].getAmount() != null) {
-					this.actions[a] = new ProcessActionData(a, actions[a].getFund(), //
-						actions[a].getAmount().evaluate(ModelTypes.Value.forType(Money.class), env).apply(msi));
+					int fa = a;
+					try {
+						this.actions[a] = new ProcessActionData(a, actions[a].getFund(), //
+							actions[a].getAmount().evaluate(ModelTypes.Value.forType(Money.class), env).apply(msi));
+						if (actions[a].getError() != null) {
+							ObservableSwingUtils.onEQ(() -> actions[fa].setError(null));
+						}
+					} catch (QonfigInterpretationException e) {
+						if (!e.getMessage().equals(actions[a].getError())) {
+							ObservableSwingUtils.onEQ(() -> actions[fa].setError(e.getMessage()));
+						}
+						if (actionErrors == null) {
+							actionErrors = new ArrayList<>();
+						}
+						actionErrors.add(actions[a].getName());
+					}
 				}
 			}
-			start=process.getStart()==null ? null : process.getStart().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
-			end=process.getEnd()==null ? null : process.getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
-			active = process.getActive() == null ? ObservableValue.of(true)
-				: process.getActive().evaluate(ModelTypes.Value.forType(boolean.class), env).get(msi);
+			StringBuilder error = null;
+			Instant start0;
+			try {
+				start0 = process.getStart() == null ? null
+					: process.getStart().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
+			} catch (QonfigInterpretationException e) {
+				start0 = null;
+				error = new StringBuilder();
+				error.append("Start: ").append(e.getMessage());
+			}
+			start = start0;
+			Instant end0;
+			try {
+				end0 = process.getEnd() == null ? null
+					: process.getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
+			} catch (QonfigInterpretationException e) {
+				end0 = null;
+				if (error == null) {
+					error = new StringBuilder();
+				} else {
+					error.append('\n');
+				}
+				error.append("End: ").append(e.getMessage());
+			}
+			end = end0;
+			ObservableValue<Boolean> active0;
+			try {
+				active0 = process.getActive() == null ? ObservableValue.of(true)
+					: process.getActive().evaluate(ModelTypes.Value.forType(boolean.class), env).get(msi);
+			} catch (QonfigInterpretationException e) {
+				active0 = ObservableValue.of(true);
+				if (error == null) {
+					error = new StringBuilder();
+				} else {
+					error.append('\n');
+				}
+				error.append("Active: ").append(e.getMessage());
+			}
+			active = active0;
+			if (lvErrors != null) {
+				if (error == null) {
+					error = new StringBuilder();
+				} else {
+					error.append('\n');
+				}
+				error.append("Local variable").append(lvErrors.size() == 1 ? " " : "s ");
+				StringUtils.conversational(", ", "and ").print(error, lvErrors, StringBuilder::append);
+			}
+			if (actionErrors != null) {
+				if (error == null) {
+					error = new StringBuilder();
+				} else {
+					error.append('\n');
+				}
+				error.append("Action").append(actionErrors.size() == 1 ? " " : "s ");
+				StringUtils.conversational(", ", "and ").print(error, actionErrors, StringBuilder::append);
+			}
+			if (error != null) {
+				String errStr = error.toString();
+				if (!errStr.equals(process.getError())) {
+					ObservableSwingUtils.onEQ(() -> process.setError(errStr));
+				}
+			} else if (process.getError() != null) {
+				ObservableSwingUtils.onEQ(() -> process.setError(null));
+			}
 			if (start != null) {
 				nextRun = start;
 			} else {

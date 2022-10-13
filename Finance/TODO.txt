@@ -1,22 +1,15 @@
 
 Design:
-	Parse money/instant/durations in variable/fund editor expression fields without accents
 	When funds or processes are added to groups, funds/processes in the same group should be stacked in the timeline.
 	Add ability to view multiple timelines at once (configurable), each with a configurable type (balances/income) and set of plans
 		Plan no longer extends VisibleEntity
 	Scale markers in timeline
 	Optional (collapsible) zoomed view in timeline for a sub-period
 	Need to restructure UI to give more space to timeline(s)
-	Make an activity boolean (maybe an expression) for processes
-	Need visualization in fund editor timeline of which processes are contributing over time
 
 Bugs:
 	Local variables table does not resize automatically when process selection changes
-	When variable is renamed, processes that use it say 'vbl' cannot be resolved to a variable
-	Suppress System.err output for expression parsing
 	Test layout/behavior for fresh installation
-	Dragging and dropping variables (and probably actions) in a process table resets the variable names to persisted
-	null color renders black in timelines, but shows up as white in the editor
 
 Implementation:
 	Removing things
@@ -24,4 +17,6 @@ Implementation:
 	Adding things to groups
 	Enable dragging for reordering in tables and tree
 	+/- buttons in tree
-	Forbid use of 'CurrentDate', 'PlanStart' as an identifier everywhere
+	Need groups?
+	Need stippling?
+	Delete key in tree

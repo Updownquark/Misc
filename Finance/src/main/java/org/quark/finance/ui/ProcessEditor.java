@@ -2,16 +2,14 @@ package org.quark.finance.ui;
 
 import java.awt.Color;
 import java.awt.event.MouseEvent;
-import java.text.ParseException;
+import java.util.Objects;
 
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ValueOperationException;
-import org.observe.expresso.ExpressoParser;
 import org.observe.expresso.JavaExpressoParser;
 import org.observe.expresso.ObservableExpression;
-import org.observe.expresso.ObservableModelSet;
 import org.observe.util.EntityReflector;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
@@ -27,29 +25,13 @@ import org.quark.finance.entities.PlanVariable;
 import org.quark.finance.entities.PlanVariableType;
 import org.quark.finance.entities.Process;
 import org.quark.finance.entities.ProcessAction;
+import org.quark.finance.entities.ProcessVariable;
 
 public class ProcessEditor extends PlanComponentEditor<Process> {
 	public ProcessEditor(ObservableValue<Process> selectedProcess, Finance app) {
-		super(selectedProcess, panel -> {
-			ExpressoParser parser = new JavaExpressoParser();
-			Format<ObservableExpression> expFormat = new Format<ObservableExpression>() {
-				@Override
-				public void append(StringBuilder text, ObservableExpression expression) {
-					if (expression != null) {
-						text.append(expression);
-					}
-				}
-
-				@Override
-				public ObservableExpression parse(CharSequence text) throws ParseException {
-					if (text.length() == 0) {
-						return null;
-					}
-					// TODO try to parse a simple monetary value first
-					return parser.parse(text.toString())//
-						.replaceAll(exp -> app.replacePlanComponents(exp, selectedProcess.get().getPlan(), selectedProcess.get(), true));
-				}
-			};
+		super(selectedProcess, false, panel -> {
+			ExpressionFormat expFormat = new ExpressionFormat(new JavaExpressoParser(), app, () -> selectedProcess.get().getPlan(),
+				selectedProcess, false);
 			ObservableCollection<Fund> availableFunds = ObservableCollection.flattenValue(//
 				selectedProcess.map(process -> process == null ? null : process.getPlan().getFunds().getValues()));
 			SettableValue<ParsedDuration> period = SettableValue.flatten(selectedProcess//
@@ -62,7 +44,7 @@ public class ProcessEditor extends PlanComponentEditor<Process> {
 				.map(process -> process == null ? null : EntityReflector.observeField(process, Process::getEnd)));
 			ObservableCollection<ProcessAction> actions = ObservableCollection.flattenValue(selectedProcess//
 				.map(process -> process == null ? null : process.getActions().getValues()));
-			ObservableCollection<PlanVariable> localVariables = ObservableCollection.flattenValue(selectedProcess//
+			ObservableCollection<ProcessVariable> localVariables = ObservableCollection.flattenValue(selectedProcess//
 				.map(process -> process == null ? null : process.getLocalVariables().getValues()));
 			String noneGroup = "None";
 			ObservableValue<String> memberships = ObservableValue.flatten(selectedProcess//
@@ -135,28 +117,14 @@ public class ProcessEditor extends PlanComponentEditor<Process> {
 				.addTable(localVariables, table -> table.fill().decorate(deco -> deco.withTitledBorder("Local Variables", Color.black))//
 					.withAdaptiveHeight(5, 10, 50)//
 					.dragAcceptRow(null).dragSourceRow(null)//
-					.withColumn("Name", String.class, PlanVariable::getName, col -> col.withWidths(50, 150, 500)//
-						.withMutation(mut -> mut.mutateAttribute(PlanVariable::setName).asText(Format.TEXT).filterAccept((lv, name) -> {
-							if (name.length() == 0) {
-								return "Variable must have a name";
+					.withColumn("Name", String.class, ProcessVariable::getName, col -> col.withWidths(50, 150, 500)//
+						.withMutation(mut -> mut.mutateAttribute((pv, name) -> {
+							if (!Objects.equals(name, pv.getName())) {
+								pv.setName(name);
+								Finance.replaceEntity(pv.getProcess(), pv);
 							}
-							try {
-								ObservableModelSet.JAVA_NAME_CHECKER.checkName(name);
-							} catch (IllegalArgumentException e) {
-								return e.getMessage();
-							}
-							for (PlanVariable vbl : selectedProcess.get().getPlan().getVariables().getValues()) {
-								if (name.equals(vbl.getName())) {
-									return "A plan variable named " + name + " exists";
-								}
-							}
-							for (PlanVariable vbl : selectedProcess.get().getLocalVariables().getValues()) {
-								if (vbl != lv.get() && name.equals(vbl.getName())) {
-									return "A local variable named " + name + " exists";
-								}
-							}
-							return null;
-						})))//
+						}).filterAccept((mce, name) -> Finance.checkVariableName(name, mce.get()))//
+							.asText(Format.TEXT)))//
 					.withColumn("Value", ObservableExpression.class, PlanVariable::getValue, col -> col.withWidths(50, 300, 1000)//
 						.withMutation(mut -> mut.mutateAttribute(PlanVariable::setValue).asText(expFormat))//
 							.decorate((cell, deco) -> {
@@ -206,7 +174,12 @@ public class ProcessEditor extends PlanComponentEditor<Process> {
 					.withColumn("Amount", ObservableExpression.class, ProcessAction::getAmount,
 						col -> col.withWidths(100, 250, 10000).withMutation(mut -> mut//
 							.mutateAttribute(ProcessAction::setAmount)//
-							.asText(expFormat)))//
+							.asText(expFormat))//
+							.decorate((cell, deco) -> {
+								if (cell.getModelValue().getError() != null) {
+									deco.withForeground(Color.red);
+								}
+							}).withCellTooltip(cell -> cell.getModelValue().getError()))//
 					.withAdd(() -> {
 						try {
 							return selectedProcess.get().getActions().create().create().get();
@@ -228,6 +201,7 @@ public class ProcessEditor extends PlanComponentEditor<Process> {
 		PanelPopulation.populateVPanel(this, null)//
 			.addComponent(null, new TimelinePanel(actionAmounts, app.getStart(), app.getEnd(), true), f -> f.fill().fillV())//
 		;
+		Finance.observeVariableName(selectedProcess);
 	}
 
 	@Override

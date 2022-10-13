@@ -11,11 +11,12 @@ import org.observe.util.swing.PanelPopulation;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.qommons.Nameable;
 import org.qommons.io.Format;
+import org.quark.finance.entities.PlanComponent;
 
 public abstract class PlanEntityEditor<E extends Nameable> extends JPanel {
 	private final ObservableValue<E> theValue;
 
-	public PlanEntityEditor(ObservableValue<E> value, Consumer<PanelPopulator<?, ?>> postName) {
+	public PlanEntityEditor(ObservableValue<E> value, boolean identifier, Consumer<PanelPopulator<?, ?>> postName) {
 		theValue = value;
 		SettableValue<String> name = SettableValue.flatten(value//
 			.map(vbl -> vbl == null ? null : EntityReflector.observeField(vbl, Nameable::getName)))//
@@ -26,6 +27,9 @@ public abstract class PlanEntityEditor<E extends Nameable> extends JPanel {
 				}
 				return testName(newName, vbl);
 			});
+		if (identifier) {
+			name = name.filterAccept(newName -> Finance.checkVariableName(newName, (PlanComponent) value.get()));
+		}
 
 		PanelPopulator<?, ?> panel = PanelPopulation.populateVPanel(this, null)//
 			.addTextField("Name:", name, Format.TEXT, f -> f.fill())//

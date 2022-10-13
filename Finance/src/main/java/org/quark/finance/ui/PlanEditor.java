@@ -10,7 +10,7 @@ import org.quark.finance.entities.Plan;
 
 public class PlanEditor extends PlanEntityEditor<Plan> {
 	public PlanEditor(ObservableValue<Plan> selectedPlan) {
-		super(selectedPlan, panel -> {
+		super(selectedPlan, false, panel -> {
 			SettableValue<Instant> currentDate = SettableValue.flatten(selectedPlan//
 				.map(plan -> plan == null ? null : EntityReflector.observeField(plan, Plan::getCurrentDate)));
 			SettableValue<Instant> goalDate = SettableValue.flatten(selectedPlan//
