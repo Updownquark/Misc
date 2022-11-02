@@ -51,7 +51,7 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	@Override
 	public <M, MV extends M> ValueContainer<M, MV> evaluateInternal(ModelInstanceType<M, MV> type, ExpressoEnv env)
 		throws QonfigInterpretationException {
-		return env.getModels().get(theEntity.getName(), type);
+		return env.getModels().getValue(theEntity.getName(), type);
 	}
 
 	@Override

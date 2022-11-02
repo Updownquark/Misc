@@ -19,6 +19,7 @@ import org.observe.expresso.ModelTypes;
 import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet;
 import org.observe.expresso.ObservableModelSet.ModelSetInstance;
+import org.observe.expresso.ObservableModelSet.ValueContainer;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.qommons.ArrayUtils;
@@ -112,7 +113,7 @@ public class PlanSimulation {
 	private static void populate(SimulationResults results, Instant start, Instant end, ExpressoEnv env) {
 		Plan plan = results.plan;
 		// Initialize the models
-		ObservableModelSet.Builder modelBuilder = ObservableModelSet.build(ObservableModelSet.JAVA_NAME_CHECKER);
+		ObservableModelSet.Builder modelBuilder = ObservableModelSet.build("simulation", ObservableModelSet.JAVA_NAME_CHECKER);
 		env = env.with(modelBuilder, null);
 		modelBuilder.with("CurrentDate", ModelTypes.Value.forType(Instant.class),
 			msi -> SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(start).build());
@@ -147,7 +148,7 @@ public class PlanSimulation {
 		}
 		env = env.with(modelBuilder.build(), null);
 
-		ModelSetInstance msi = env.getModels().createInstance(null, results.finished.noInitChanges());
+		ModelSetInstance msi = env.getModels().createInstance(null, results.finished.noInitChanges()).build();
 		results.models = msi;
 
 		// Initialize fund balances
@@ -183,7 +184,14 @@ public class PlanSimulation {
 				ObservableSwingUtils.onEQ(() -> process.setError(fMsg));
 			}
 		}
-		SettableValue<Instant> currentDate = msi.get("CurrentDate", ModelTypes.Value.forType(Instant.class));
+		SettableValue<Instant> currentDate;
+		try {
+			currentDate = env.getModels().getValue("CurrentDate", ModelTypes.Value.forType(Instant.class)).get(msi);
+		} catch (QonfigInterpretationException e) {
+			e.printStackTrace();
+			return;
+		}
+
 		// Run the processes up to the start time
 		while (!sequence.isEmpty() && sequence.getFirst().nextRun.compareTo(start) < 0) {
 			ProcessData process = sequence.pop();
@@ -332,7 +340,7 @@ public class PlanSimulation {
 						.withDescription(vbl.getName() + "_balance")//
 						.withValue(new Money(0)).build();
 					fundBalances.put(vbl.getName(), balance);
-					modelBuilder.with(vbl.getName(), ObservableModelSet.container(msi -> balance, MONEY_TYPE));
+					modelBuilder.with(vbl.getName(), ValueContainer.of(MONEY_TYPE, msi -> balance));
 				}
 			} catch (QonfigInterpretationException e) {
 				message = vbl.getName() + ": " + e.getMessage();
@@ -394,7 +402,7 @@ public class PlanSimulation {
 			visited = new HashMap<>(visited);
 			List<String> lvErrors = null, actionErrors = null;
 			if (!process.getLocalVariables().getValues().isEmpty()) {
-				ObservableModelSet.WrappedBuilder modelBuilder = msi.getModel().wrap();
+				ObservableModelSet.Builder modelBuilder = msi.getModel().wrap("processLocal");
 				env = env.with(modelBuilder, null);
 				BetterSet<PlanComponent> vblPath = BetterHashSet.build().build();
 				for (PlanVariable vbl : process.getLocalVariables().getValues()) {
@@ -406,16 +414,16 @@ public class PlanSimulation {
 						lvErrors.add(vbl.getName());
 					}
 				}
-				ObservableModelSet.Wrapped wrapped = modelBuilder.build();
+				ObservableModelSet wrapped = modelBuilder.build();
 				env = env.with(wrapped, null);
-				msi = wrapped.wrap(msi).build();
+				msi = wrapped.createInstance(msi.getUntil()).withAll(msi).build();
 			}
 			for (int a = 0; a < actions.length; a++) {
 				if (actions[a].getFund() != null && actions[a].getAmount() != null) {
 					int fa = a;
 					try {
 						this.actions[a] = new ProcessActionData(a, actions[a].getFund(), //
-							actions[a].getAmount().evaluate(ModelTypes.Value.forType(Money.class), env).apply(msi));
+							actions[a].getAmount().evaluate(ModelTypes.Value.forType(Money.class), env).get(msi));
 						if (actions[a].getError() != null) {
 							ObservableSwingUtils.onEQ(() -> actions[fa].setError(null));
 						}

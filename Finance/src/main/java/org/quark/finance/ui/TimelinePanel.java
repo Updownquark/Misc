@@ -26,6 +26,7 @@ import org.observe.expresso.ModelTypes;
 import org.qommons.ArrayUtils;
 import org.qommons.Colors;
 import org.qommons.TimeUtils;
+import org.qommons.config.QonfigInterpretationException;
 import org.quark.finance.entities.Plan;
 import org.quark.finance.entities.PlanComponent;
 import org.quark.finance.entities.PlanVariable;
@@ -103,7 +104,14 @@ public class TimelinePanel extends JPanel {
 						if (!vbl.isShown() || vbl.getError() != null || vbl.getVariableType() != PlanVariableType.Instant) {
 							continue;
 						}
-						Instant vblTime = (Instant) results.getModels().get(vbl.getName(), ModelTypes.Value.any()).get();
+						Instant vblTime;
+						try {
+							vblTime = (Instant) results.getModels().getModel().getValue(vbl.getName(), ModelTypes.Value.any())
+								.get(results.getModels()).get();
+						} catch (QonfigInterpretationException ex) {
+							ex.printStackTrace();
+							continue;
+						}
 						int pos = (int) Math.round(getWidth() * TimeUtils.toSeconds(TimeUtils.between(startV, vblTime)) / length);
 						if (Math.abs(e.getX() - pos) <= 1) {
 							Color color = vbl.getColor();
@@ -362,7 +370,14 @@ public class TimelinePanel extends JPanel {
 				if (!vbl.isShown() || vbl.getError() != null || vbl.getVariableType() != PlanVariableType.Instant) {
 					continue;
 				}
-				Instant vblTime = (Instant) results.getModels().get(vbl.getName(), ModelTypes.Value.any()).get();
+				Instant vblTime;
+				try {
+					vblTime = (Instant) results.getModels().getModel().getValue(vbl.getName(), ModelTypes.Value.any())
+						.get(results.getModels()).get();
+				} catch (QonfigInterpretationException e) {
+					e.printStackTrace();
+					continue;
+				}
 				int pos = (int) Math.round(w * TimeUtils.toSeconds(TimeUtils.between(start, vblTime)) / length);
 				if (pos >= 0 && pos < w) {
 					g.setColor(vbl.getColor());
