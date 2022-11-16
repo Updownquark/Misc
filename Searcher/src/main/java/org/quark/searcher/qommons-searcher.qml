@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<quick uses:base="Quick-Base v0.1" uses:swing="Quick-Swing v0.1" uses:x="Quick-X v0.1"
+<quick uses:base="Quick-Base v0.1" uses:swing="Quick-Swing v0.1" uses:x="Quick-X v0.1" uses:expresso="Expresso-Config v0.1"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="`Qommons Searcher`"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
@@ -11,20 +11,14 @@
 			<import>org.qommons.io.BetterFile</import>
 		</imports>
 		<models>
-			<ext-model name="ext">
-				<value name="workingDir" type="String" />
-				<action name="searchAction" type="Void" />
-				<value name="resultRoot" type="QuickSearcher.SearchResultNode" />
-				<value name="status" type="QuickSearcher.SearchStatus" />
-				<value name="statusText" type="String" />
-			</ext-model>
 			<model name="formats">
 				<file-source name="files" max-archive-depth="config.zipLevel">
 					<archive-method type="zip" />
 					<archive-method type="tar" />
 					<archive-method type="gz" />
 				</file-source>
-				<format name="fileFormat" type="file" file-source="files" working-dir="ext.workingDir" />
+				<constant name="workingDir">System.getProperty("user.dir")</constant>
+				<format name="fileFormat" type="file" file-source="files" working-dir="workingDir" />
 				<format name="patternFormat" type="regex-format-string" />
 				<format name="byteFormat" type="double" sig-digs="4" unit="b" metric-prefixes-p2="true" />
 				<format name="timeFormat" type="instant" max-resolution="Minute" relative-eval-type="Past" />
@@ -52,26 +46,75 @@
 				<value name="maxSize" type="double" default="QuickSearcher.DEFAULT_MAX_SIZE" />
 				<value name="minLM" type="java.time.Instant" default="`Jan 01 1900 12:00am`" />
 				<value name="maxLM" type="java.time.Instant" default="`Jan 01 3000 12:00am`" />
-				<!-- TODO Filter accept the mins/maxes above to keep max>min -->
+				<!-- TODO Filter accept the mins/maxes above to keep max&gt;min -->
 
 				<value name="mainSplitDiv" type="double" default="25" />
 				<value name="rightSplitDiv" type="double" default="40" />
 			</config>
 			<model name="app">
-				<transform name="configurable" source="ext.status">
-					<map-to function="QuickSearcher.isConfigurable" />
+				<constant name="searcher">new QuickSearcher(config.searchBase, config.fileNamePattern,
+					config.excludedFileNames, config.minSize, config.maxSize, config.minLM, config.maxLM)
+				</constant>
+				<!-- These transformations need the type specified so they are interpreted as values of the given type,
+					since QuickSearcher provides these as observables so the app can be notified of changes.
+					Without the type specified, these variables would be of type ObservableValue<Whatever> instead of type Whatever.
+				-->
+				<transform name="status" source="searcher">
+					<map-to type="QuickSearcher.SearchStatus" source-as="srch">
+						<map-with>srch.getStatus()</map-with>
+					</map-to>
 				</transform>
-				<transform name="searchText" source="ext.status">
-					<map-to function="QuickSearcher::getSearchText" />
+				<transform name="statusMessage" source="searcher">
+					<map-to type="String" source-as="srch">
+						<map-with>srch.getStatusMessage()</map-with>
+					</map-to>
 				</transform>
-				<value name="selectedResult" type="QuickSearcher.SearchResultNode" />
+				<transform name="resultRoot" source="searcher">
+					<map-to type="QuickSearcher.SearchResultNode" source-as="srch">
+						<map-with>srch.getResultRoot()</map-with>
+					</map-to>
+				</transform>
+				<transform name="selectedResult" source="searcher">
+					<map-to type="QuickSearcher.SearchResultNode" source-as="srch">
+						<map-with>srch.getSelectedResult()</map-with>
+					</map-to>
+				</transform>
+				<transform name="configurable" source="searcher">
+					<map-to type="String" source-as="srch">
+						<map-with>srch.isConfigurable()</map-with>
+					</map-to>
+				</transform>
+				<transform name="searchText" source="searcher">
+					<map-to type="String" source-as="srch">
+						<map-with>srch.getSearchText()</map-with>
+					</map-to>
+				</transform>
+				<transform name="searchEnabled" source="searcher">
+					<map-to type="String" source-as="srch">
+						<map-with>srch.isSearchEnabled()</map-with>
+					</map-to>
+				</transform>
+				<action name="_searchAction">searcher.search(config.searchBase,
+					config.fileNamePattern, config.fileNameRegex, config.fileNameCaseSensitive,
+					config.fileTextPattern, config.fileTextRegex, config.fileTextCaseSensitive,
+					config.multiContentMatches, config.maxFileMatchLength, config.fileRequirements)
+				</action>
+				<transform name="searchAction" source="_searchAction">
+					<disable with="searchEnabled" />
+				</transform>
 				<transform name="textMatches" source="selectedResult">
-					<flatten function="QuickSearcher.SearchResultNode::getTextResults" null-to-null="true" />
+					<map-to source-as="res" null-to-null="true">
+						<map-with>res.getTextResults()</map-with>
+					</map-to>
+					<flatten />
 				</transform>
 				<value name="selectedTextMatch" type="QuickSearcher.TextResult" />
 				<transform name="selectedText" source="selectedTextMatch">
-					<map-to function="QuickSearcher::renderTextResult" />
+					<map-to source-as="tm">
+						<map-with>QuickSearcher.renderTextResult(tm)</map-with>
+					</map-to>
 				</transform>
+				<hook name="blah" on="searchEnabled">System.out.println("searchEnabled: "+event)</hook>
 			</model>
 		</models>
 		<style-sheet>
@@ -84,7 +127,7 @@
 		</style-sheet>
 	</head>
 	<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify">
-		<split orientation="horizontal" split-position="${config.mainSplitDiv + &quot;%&quot;}">
+		<split orientation="horizontal" split-position="config.mainSplitDiv %">
 			<field-panel>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="`Search In:`" fill="true">
 					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.configurable" columns="50"
@@ -111,7 +154,7 @@
 						<transform name="testFilePath" source="_testFilePath">
 							<refresh on="config.fileNamePattern" />
 						</transform>
-						<format name="fileNamePatternFormat" type="file" file-source="formats.files" working-dir="ext.workingDir">
+						<format name="fileNamePatternFormat" type="file" file-source="formats.files" working-dir="formats.workingDir">
 							<validate type="regex-validation" pattern="config.fileNamePattern" />
 						</format>
 					</model>
@@ -166,16 +209,16 @@
 					<field-panel role="content">
 						<text-field field-name="`Max Archive Depth:`" value="config.zipLevel" disable-with="app.configurable" columns="8"
 							tooltip="`Maximum number of archives to descend into recursively`" />
-						<radio-buttons field-name="`Directory:`" render-value-name="type" value="config.fileRequirements.observe(Directory)"
+						<radio-buttons field-name="`Directory:`" value="config.fileRequirements.observe(Directory)"
 							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
 							tooltip="`Whether matching files may/must/cannot be directories`" />
-						<radio-buttons field-name="`Readable:`" render-value-name="type" value="config.fileRequirements.observe(Readable)"
+						<radio-buttons field-name="`Readable:`" value="config.fileRequirements.observe(Readable)"
 							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
 							tooltip="`Whether matching files may/must/cannot be readable`" />
-						<radio-buttons field-name="`Writable:`" render-value-name="type" value="config.fileRequirements.observe(Writable)"
+						<radio-buttons field-name="`Writable:`" value="config.fileRequirements.observe(Writable)"
 							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
 							tooltip="`Whether matching files may/must/cannot be writable`" />
-						<radio-buttons field-name="`Hidden:`" render-value-name="type" value="config.fileRequirements.observe(Hidden)"
+						<radio-buttons field-name="`Hidden:`" value="config.fileRequirements.observe(Hidden)"
 							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
 							tooltip="`Whether matching files may/must/cannot be hidden`" />
 						<box field-name="`Size:`" layout="inline" orientation="horizontal" main-align="justify" fill="true"
@@ -193,41 +236,44 @@
 					</field-panel>
 				</collapse-pane>
 				<spacer length="3" />
-				<table rows="config.excludedFileNames" fill="true" value-name="row" render-value-name="col">
+				<table rows="config.excludedFileNames" fill="true">
 					<titled-border title="`Exclude Files`">
 						<style attr="border-color" condition="config.multiContentMatches">`blue`</style>
 						<style attr="font-weight" condition="config.fileNameCaseSensitive">`bold`</style>
 						<style attr="font-slant" condition="config.fileTextCaseSensitive">`italic`</style>
 						<style attr="border-color" condition="hovered">`green`</style>
 					</titled-border>
-					<column name="Pattern" value="row.getPattern()">
-						<column-edit type="modify-row-value" edit-value-name="pattern" commit="row.setPattern(pattern)">
-							<text-field format="formats.patternFormat" />
+					<column name="Pattern" value="value.getPattern()">
+						<column-edit type="modify-row-value" commit="value.setPattern(columnValue)">
+							<text-field value="columnValue" format="formats.patternFormat" />
 						</column-edit>
 					</column>
-					<column name="Case" value="row.isCaseSensitive()">
-						<check-box role="renderer" />
-						<column-edit type="modify-row-value" edit-value-name="cs" commit="row.setCaseSensitive(cs)">
-							<check-box />
+					<column name="Case" value="value.isCaseSensitive()">
+						<check-box value="columnValue" />
+						<column-edit type="modify-row-value" commit="value.setCaseSensitive(columnValue)">
+							<check-box value="columnValue" />
 						</column-edit>
 					</column>
-					<multi-value-action value-list-name="blah" icon="icons/add.png" action="config.excludedFileNames.create().create()"
+					<!--TODO Add these back in 
+					<multi-value-action value-list-name="blah" icon="&quot;icons/add.png&quot;" action="config.excludedFileNames.create().create()"
 						allow-for-empty="true" />
-					<multi-value-action value-list-name="rows" icon="icons/remove.png"
+					<!- TODO Won't this clear the entire list? ->
+					<multi-value-action icon="&quot;icons/remove.png&quot;"
 						action="config.excludedFileNames.getValues().removeAll(rows)" allow-for-empty="true" />
+					-->
 				</table>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
-					<button action="ext.searchAction">app.searchText</button>
+					<button action="app.searchAction">app.searchText</button>
 				</box>
 			</field-panel>
-			<split orientation="vertical" split-position="${config.rightSplitDiv + &quot;%&quot;}">
-				<tree root="ext.resultRoot" value-name="path" render-value-name="node" children="node.getChildren()"
-					selection="app.selectedResult" leaf="!node.getFile().isDirectory()">
+			<split orientation="vertical" split-position="config.rightSplitDiv %">
+				<tree root="app.resultRoot" value-name="result" children="result.getChildren()"
+					selection="app.selectedResult" leaf="!result.getFile().isDirectory()">
 					<column name="Tree">
 						<!-- These icons are from https://icons8.com, specifically icon/11651/file and icon/21079/folder" -->
-						<label role="renderer" value="node.getFile().getName()"
-							icon="${&quot;icons/icons8-&quot;+(node.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)}" />
+						<label value="result.getFile().getName()"
+							icon="&quot;icons/icons8-&quot;+(result.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
 					</column>
 				</tree>
 				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify" visible="isTextFiltered">
@@ -236,16 +282,16 @@
 					</model>
 					<label value="&quot;Text Matches In &quot;+app.selectedResult.getFile().getPath()"
 						visible="app.selectedResult!=null"/>
-					<table rows="app.textMatches" selection="app.selectedTextMatch" value-name="row" render-value-name="col">
-						<column name="Value" value="row.getValue()" />
-						<column name="Pos" value="row.getPosition()" />
-						<column name="Line" value="row.getLineNumber()" />
-						<column name="Col" value="row.getColumnNumber()" />
+					<table rows="app.textMatches" selection="app.selectedTextMatch">
+						<column name="Value" value="value.getValue()" />
+						<column name="Pos" value="value.getPosition()" />
+						<column name="Line" value="value.getLineNumber()" />
+						<column name="Col" value="value.getColumnNumber()" />
 					</table>
 					<text-area rows="10" value="app.selectedText" html="true" editable="false" />
 				</box>
 			</split>
 		</split>
-		<label value="ext.statusText" />
+		<label value="app.statusMessage" />
 	</box>
 </quick>
