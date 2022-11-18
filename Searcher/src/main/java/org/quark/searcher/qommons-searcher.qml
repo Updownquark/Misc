@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <quick uses:base="Quick-Base v0.1" uses:swing="Quick-Swing v0.1" uses:x="Quick-X v0.1" uses:expresso="Expresso-Config v0.1"
+	uses:exDebug="Expresso-Debug v0.1"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="`Qommons Searcher`"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
@@ -59,7 +60,16 @@
 					since QuickSearcher provides these as observables so the app can be notified of changes.
 					Without the type specified, these variables would be of type ObservableValue<Whatever> instead of type Whatever.
 				-->
-				<transform name="status" source="searcher">
+				<value name="status" type="QuickSearcher.SearchStatus">searcher.getStatus()</value>
+				<value name="statusMessage" type="String">searcher.getStatusMessage()</value>
+				<value name="resultRoot" type="QuickSearcher.SearchResultNode">searcher.getResultRoot()</value>
+				<value name="selectedResult" type="QuickSearcher.SearchResultNode">searcher.getSelectedResult()</value>
+				<value name="configurable" type="String">searcher.isConfigurable()</value>
+				<value name="searchText" type="String">searcher.getSearchText()</value>
+				<value name="searchEnabled" type="String">searcher.isSearchEnabled()</value>
+				<value name="selectedTextMatch" type="QuickSearcher.TextResult" />
+				<value name="selectedText" type="String">QuickSearcher.renderTextResult(selectedTextMatch)</value>
+				<!--<transform name="status" source="searcher" break-on="createValue">
 					<map-to type="QuickSearcher.SearchStatus" source-as="srch">
 						<map-with>srch.getStatus()</map-with>
 					</map-to>
@@ -93,16 +103,19 @@
 					<map-to type="String" source-as="srch">
 						<map-with>srch.isSearchEnabled()</map-with>
 					</map-to>
-				</transform>
+				</transform>-->
 				<action name="_searchAction">searcher.search(config.searchBase,
 					config.fileNamePattern, config.fileNameRegex, config.fileNameCaseSensitive,
 					config.fileTextPattern, config.fileTextRegex, config.fileTextCaseSensitive,
 					config.multiContentMatches, config.maxFileMatchLength, config.fileRequirements)
 				</action>
+				<value name="searchUIEnabled">searcher.isSearchUiEnabled()</value>
+				<value name="searchActionEnabled">searcher.isSearchActionEnabled()</value>
 				<transform name="searchAction" source="_searchAction">
-					<disable with="searchEnabled" />
+					<disable with="searchActionEnabled" />
 				</transform>
-				<transform name="textMatches" source="selectedResult">
+				<value name="textMatches">selectedResult.getTextResults()</value>
+				<!--<transform name="textMatches" source="selectedResult">
 					<map-to source-as="res" null-to-null="true">
 						<map-with>res.getTextResults()</map-with>
 					</map-to>
@@ -113,8 +126,8 @@
 					<map-to source-as="tm">
 						<map-with>QuickSearcher.renderTextResult(tm)</map-with>
 					</map-to>
-				</transform>
-				<hook name="blah" on="searchEnabled">System.out.println("searchEnabled: "+event)</hook>
+				</transform>-->
+				<hook name="blah" on="searchUIEnabled">System.out.println("enabled: "+event)</hook>
 			</model>
 		</models>
 		<style-sheet>
@@ -130,7 +143,7 @@
 		<split orientation="horizontal" split-position="config.mainSplitDiv %">
 			<field-panel>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="`Search In:`" fill="true">
-					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.configurable" columns="50"
+					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.searchUIEnabled" columns="50"
 						tooltip="`Root folder or file to search in`" />
 					<file-button open="true" value="config.searchBase" disable-with="app.configurable"
 						tooltip="`Root folder or file to search in`" />
@@ -140,7 +153,7 @@
 					<label>----File Name----</label>
 				</box>
 				<box field-name="`File Pattern:`" layout="inline" orientation="horizontal" main-align="justify" fill="true">
-					<text-field value="config.fileNamePattern" format="formats.patternFormat" disable-with="app.configurable"
+					<text-field value="config.fileNamePattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Pattern of file names to search for`" />
 					<check-box value="config.fileNameRegex" disable-with="app.configurable"
 						tooltip="`Whether the file pattern is evaluated as a regular expression`">`Regex:`</check-box>
@@ -158,9 +171,9 @@
 							<validate type="regex-validation" pattern="config.fileNamePattern" />
 						</format>
 					</model>
-					<text-field value="testFilePath" format="fileNamePatternFormat" disable-with="app.configurable"
+					<text-field value="testFilePath" format="fileNamePatternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Enter a file name to test the file pattern against it`" />
-					<file-button open="true" value="testFilePath" disable-with="app.configurable"
+					<file-button open="true" value="testFilePath" disable-with="app.searchUIEnabled"
 						tooltip="`Enter a file name to test the file pattern against it`" />
 				</box>
 				<spacer length="3" />
@@ -177,13 +190,13 @@
 							<value>config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? &quot;No Text Pattern set&quot; : null</value>
 						</first-value>
 					</model>
-					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.configurable"
+					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Text to search for in matching files`">
 						<style attr="color" condition="hovered">`green`</style>
 					</text-field>
-					<check-box value="config.fileTextRegex" disable-with="textPatternModEnabled"
+					<check-box value="config.fileTextRegex" disable-with="app.searchUIEnabled || textPatternModEnabled"
 						tooltip="`Whether the file content pattern is evaluated as a regular expression`">`Regex:`</check-box>
-					<check-box value="config.fileTextCaseSensitive" disable-with="textPatternModEnabled"
+					<check-box value="config.fileTextCaseSensitive" disable-with="app.searchUIEnabled || textPatternModEnabled" 
 						tooltip="`Whether the text pattern is evaluated case-sensitively`">`Case:`</check-box>
 				</box>
 				<box field-name="`Test Text:`" layout="border" fill="true" visible="isTextFiltered">
@@ -197,41 +210,41 @@
 							<validate type="regex-validation" pattern="config.fileTextPattern" />
 						</format>
 					</model>
-					<text-field value="testFileContent" format="fileContentPatternFormat"
+					<text-field value="testFileContent" format="fileContentPatternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Enter text to test the text pattern against it`" />
 				</box>
-				<check-box value="config.multiContentMatches" field-name="`Multiple Text Matches:`" disable-with="app.configurable" />
+				<check-box value="config.multiContentMatches" field-name="`Multiple Text Matches:`" disable-with="app.searchUIEnabled" />
 				<spacer length="3" />
 				<collapse-pane fill="true" name="debug">
 					<box role="header" layout="inline" orientation="vertical" main-align="center">
 						<label>----File Metadata----</label>
 					</box>
 					<field-panel role="content">
-						<text-field field-name="`Max Archive Depth:`" value="config.zipLevel" disable-with="app.configurable" columns="8"
+						<text-field field-name="`Max Archive Depth:`" value="config.zipLevel" disable-with="app.searchUIEnabled" columns="8"
 							tooltip="`Maximum number of archives to descend into recursively`" />
 						<radio-buttons field-name="`Directory:`" value="config.fileRequirements.observe(Directory)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be directories`" />
 						<radio-buttons field-name="`Readable:`" value="config.fileRequirements.observe(Readable)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be readable`" />
 						<radio-buttons field-name="`Writable:`" value="config.fileRequirements.observe(Writable)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be writable`" />
 						<radio-buttons field-name="`Hidden:`" value="config.fileRequirements.observe(Hidden)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.configurable"
+							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be hidden`" />
 						<box field-name="`Size:`" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="`Size range for matching files`">
-							<text-field value="config.minSize" format="formats.byteFormat" disable-with="app.configurable" />
+							<text-field value="config.minSize" format="formats.byteFormat" disable-with="app.searchUIEnabled" />
 							<label>...</label>
-							<text-field value="config.maxSize" format="formats.byteFormat" disable-with="app.configurable" />
+							<text-field value="config.maxSize" format="formats.byteFormat" disable-with="app.searchUIEnabled" />
 						</box>
 						<box field-name="`Last Modified:`" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="`Last modified date range for matching files`">
-							<text-field value="config.minLM" format="formats.timeFormat" disable-with="app.configurable" columns="20" />
+							<text-field value="config.minLM" format="formats.timeFormat" disable-with="app.searchUIEnabled" columns="20" />
 							<label>...</label>
-							<text-field value="config.maxLM" format="formats.timeFormat" disable-with="app.configurable" columns="20" />
+							<text-field value="config.maxLM" format="formats.timeFormat" disable-with="app.searchUIEnabled" columns="20" />
 						</box>
 					</field-panel>
 				</collapse-pane>

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -17,10 +18,15 @@ import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedSet;
+import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
+import org.qommons.ThreadConstraint;
+import org.qommons.Transactable;
+import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
+import org.qommons.collect.RRWLockingStrategy;
 import org.qommons.io.BetterFile;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.BetterPattern;
@@ -44,16 +50,19 @@ public class QuickSearcher {
 		Map<String, NamedGroupCapture> matchGroups;
 		int fileMatches;
 		int contentMatches;
+		final CollectionLockingStrategy locking;
 		final ObservableSortedSet<SearchResultNode> children;
 		ObservableCollection<TextResult> textResults;
 
-		SearchResultNode(int searchNumber, SearchResultNode parent, BetterFile file) {
+		SearchResultNode(int searchNumber, SearchResultNode parent, BetterFile file, CollectionLockingStrategy locking) {
 			this.searchNumber = searchNumber;
 			this.parent = parent;
 			this.file = file;
+			this.locking = locking;
 			children = ObservableSortedSet.build(SearchResultNode.class,
-				(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true)).build();
-			textResults = ObservableCollection.build(TextResult.class).build();
+				(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true)).withLocking(locking)
+				.build();
+			textResults = ObservableCollection.build(TextResult.class).withLocking(locking).build();
 		}
 
 		SearchResultNode getChild(BetterFile child) {
@@ -62,7 +71,7 @@ public class QuickSearcher {
 					return ch;
 				}
 			}
-			SearchResultNode node = new SearchResultNode(searchNumber, this, child);
+			SearchResultNode node = new SearchResultNode(searchNumber, this, child, locking);
 			node.parentChildId = children.addElement(node, false).getElementId();
 			return node;
 		}
@@ -167,6 +176,7 @@ public class QuickSearcher {
 		Canceling
 	}
 
+	private final Transactable theLocking;
 	private final SettableValue<SearchResultNode> theResults;
 	private final SettableValue<SearchStatus> theStatus;
 	private final SettableValue<String> theStatusMessage;
@@ -189,10 +199,11 @@ public class QuickSearcher {
 	public QuickSearcher(ObservableValue<BetterFile> searchBase, ObservableValue<String> fileNamePattern, //
 		ObservableCollection<PatternConfig> exclusions, ObservableValue<Double> minFileSize, ObservableValue<Double> maxFileSize,
 		ObservableValue<Instant> minFileTime, ObservableValue<Instant> maxFileTime) {
-		theResults = SettableValue.build(SearchResultNode.class).build();
-		theSelectedResult = SettableValue.build(SearchResultNode.class).build();
-		theStatus = SettableValue.build(SearchStatus.class).withValue(SearchStatus.Idle).build();
-		theStatusMessage = SettableValue.build(String.class).withValue("Ready to search").build();
+		theLocking = Transactable.transactable(new ReentrantReadWriteLock(), this, ThreadConstraint.ANY);
+		theResults = SettableValue.build(SearchResultNode.class).withLocking(theLocking).build();
+		theSelectedResult = SettableValue.build(SearchResultNode.class).withLocking(theLocking).build();
+		theStatus = SettableValue.build(SearchStatus.class).withLocking(theLocking).withValue(SearchStatus.Idle).build();
+		theStatusMessage = SettableValue.build(String.class).withLocking(theLocking).withValue("Ready to search").build();
 
 		theSearchBase = searchBase;
 		theFileNamePattern = fileNamePattern;
@@ -257,6 +268,40 @@ public class QuickSearcher {
 		);
 	}
 
+	public ObservableValue<String> isSearchUiEnabled() {
+		return ObservableValue.firstValue(TypeTokens.get().STRING, s -> s != null, () -> null, //
+			isSearchEnabled(), //
+			theStatus.map(String.class, status -> {
+				switch (status) {
+				case Idle:
+					return null;
+				case Searching:
+					return "Search in progress...";
+				case Canceling:
+					return "Canceling...";
+				}
+				return "?";
+			})//
+		);
+	}
+
+	public ObservableValue<String> isSearchActionEnabled() {
+		return ObservableValue.firstValue(TypeTokens.get().STRING, s -> s != null, () -> null, //
+			isSearchEnabled(), //
+			theStatus.map(String.class, status -> {
+				switch (status) {
+				case Idle:
+					return null;
+				case Searching:
+					return null; // Cancellable
+				case Canceling:
+					return "Canceling...";
+				}
+				return "?";
+			})//
+		);
+	}
+
 	/** @return The text to display for the search button */
 	public ObservableValue<String> getSearchText() {
 		return theStatus.map(String.class, status -> {
@@ -310,7 +355,7 @@ public class QuickSearcher {
 		} else {
 			contentPattern = BetterPattern.compile(fileContentPattern, fileContentCaseSensitive ? 0 : Pattern.CASE_INSENSITIVE);
 		}
-		SearchResultNode rootResult = new SearchResultNode(++theSearchNumber, null, searchBase);
+		SearchResultNode rootResult = new SearchResultNode(++theSearchNumber, null, searchBase, new RRWLockingStrategy(theLocking));
 		ObservableSwingUtils.onEQ(() -> {
 			theStatus.set(SearchStatus.Searching, null);
 			theResults.set(rootResult, null);
