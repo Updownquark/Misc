@@ -333,7 +333,6 @@ public class QuickSearcher {
 		String fileContentPattern, boolean fileContentRegex, boolean fileContentCaseSensitive, //
 		boolean searchMultipleContentMatches, int maxFileMatchLength,
 		Map<FileBooleanAttribute, FileAttributeRequirement> fileRequirements) {
-		System.out.println("Search called");
 		if (theStatus.get() != SearchStatus.Idle) {
 			isCanceling = true;
 			return;

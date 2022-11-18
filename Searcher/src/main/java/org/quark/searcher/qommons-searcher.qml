@@ -127,7 +127,6 @@
 						<map-with>QuickSearcher.renderTextResult(tm)</map-with>
 					</map-to>
 				</transform>-->
-				<hook name="blah" on="searchUIEnabled">System.out.println("enabled: "+event)</hook>
 			</model>
 		</models>
 		<style-sheet>
