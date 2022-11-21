@@ -12,8 +12,6 @@ import org.qommons.Transaction;
 import org.qommons.config.QonfigInterpretationException;
 import org.quark.finance.entities.PlanComponent;
 
-import com.google.common.reflect.TypeToken;
-
 public class NamedEntityExpression<E extends PlanComponent> implements ObservableExpression {
 	private static final ThreadLocal<Boolean> PERSISTING = new ThreadLocal<>();
 
@@ -52,12 +50,6 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	public <M, MV extends M> ValueContainer<M, MV> evaluateInternal(ModelInstanceType<M, MV> type, ExpressoEnv env)
 		throws QonfigInterpretationException {
 		return env.getModels().getValue(theEntity.getName(), type);
-	}
-
-	@Override
-	public <P1, P2, P3, T> MethodFinder<P1, P2, P3, T> findMethod(TypeToken<T> targetType, ExpressoEnv env)
-		throws QonfigInterpretationException {
-		throw new QonfigInterpretationException("Named entity cannot be evaluated as a method");
 	}
 
 	@Override
