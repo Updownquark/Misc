@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="jar" name="Create Runnable Jar for Project OGame ROI">
+    <!--this file was created by Eclipse Runnable JAR Export Wizard-->
+    <!--ANT 1.7 is required                                        -->
+    <!--define folder properties-->
+	<property name="app.name" value="Qommons Search" />
+	<property name="app.short.name" value="QommonsSearcher" />
+	<property name="app.vendor" value="Updownquark" />
+	<property name="app.version" value="0.0.2" />
+	<property name="app.descrip" value="An app for advanced file searching" />
+	<property name="main.class" value="org.quark.searcher.QuickSearcher"/>
+
+    <property name="dir.buildfile" value="."/>
+    <property name="dir.workspace" value="../.."/>
+    <property name="dir.jarfile" value="${dir.buildfile}/target/deploy"/>
+	<property name="jar.file" value="${dir.jarfile}/${app.short.name}.jar" />
+    <target name="jar">
+        <jar destfile="${jar.file}" filesetmanifest="mergewithoutmain">
+            <manifest>
+                <!--<attribute name="Main-Class" value="${main.class}"/>-->
+            	<attribute name="Main-Class" value="org.observe.quick.QuickApp" />
+                <attribute name="Class-Path" value="."/>
+            	<attribute name="Quick-App" value="/org/quark/searcher/qommons-searcher-app.qml" />
+            	<!-- <attribute name="SplashScreen-Image" value="icons/Juggling Planets.png"/>-->
+            	<section name="org/quark/searcher/">
+	            	<attribute name="Specification-Title" value="${app.name}" />
+            		<attribute name="Specification-Version" value="${app.version}" />
+            		<attribute name="Specification-Vendor" value="${app.vendor}" />
+            		<attribute name="Implementation-Title" value="org.quark.searcher" />
+            		<attribute name="Implementation-Version" value="${app.version}" />
+            	</section>
+            	<attribute name="Quick-File" value="org/quark/searcher/qommons-searcher.qml" />
+            </manifest>
+            <fileset dir="${dir.buildfile}/target/classes"/>
+            <fileset dir="${dir.buildfile}/src/main/java"/>
+            <fileset dir="${dir.workspace}/Qommons/target/classes"/>
+            <fileset dir="${dir.workspace}/Qommons/src/main/java"/>
+            <fileset dir="${dir.workspace}/ObServe/target/classes"/>
+            <fileset dir="${dir.workspace}/ObServe/src/main/java"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/guava-18.0.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-core-4.2.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/miglayout-swing-4.2.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/swingx-1.6.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/antlr-runtime-4.9.2.jar"/>
+            <fileset dir="${dir.workspace}/ObServe-ext/target/classes"/>
+            <fileset dir="${dir.workspace}/ObServe-ext/src/main/java"/>
+        </jar>
+    </target>
+</project>
