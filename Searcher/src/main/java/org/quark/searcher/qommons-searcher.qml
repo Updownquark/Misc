@@ -128,7 +128,8 @@
 					</map-to>
 				</transform>-->
 				<hook name="initFileRequirements">QuickSearcher.initializeFileRequirements(config.fileRequirements)</hook>
-				<value name="fnpEmpty">config.fileNamePattern==null || config.fileNamePattern.isEmpty()</value>
+				<value name="isFileNameFiltered">config.fileNamePattern==null || config.fileNamePattern.isEmpty()</value>
+				<value name="isTextFiltered">config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty()</value>
 			</model>
 		</models>
 		<style-sheet>
@@ -157,14 +158,14 @@
 					<text-field value="config.fileNamePattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Pattern of file names to search for`" />
 					<check-box value="config.fileNameRegex"
-						disable-with="app.configurable || (app.fnpEmpty ? &quot;No File Pattern&quot; : null)"
+						disable-with="app.configurable || (app.isFileNameFiltered ? &quot;No File Pattern&quot; : null)"
 						tooltip="`Whether the file pattern is evaluated as a regular expression`">`Regex:`</check-box>
 					<check-box value="config.fileNameCaseSensitive"
-						disable-with="app.configurable || (app.fnpEmpty ? &quot;No File Pattern&quot; : null)"
+						disable-with="app.configurable || (app.isFileNameFiltered ? &quot;No File Pattern&quot; : null)"
 						tooltip="`Whether the file pattern is evaluated case-sensitively`">`Case:`</check-box>
 				</box>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="`Test File:`" fill="true"
-					visible="!app.fnpEmpty &amp; config.fileNameRegex">
+					visible="!app.isFileNameFiltered &amp; config.fileNameRegex">
 					<model>
 						<value name="_testFilePath" type="BetterFile" />
 						<transform name="testFilePath" source="_testFilePath">
@@ -206,9 +207,8 @@
 					<check-box value="config.fileTextCaseSensitive" disable-with="app.searchUIEnabled || textPatternModEnabled" 
 						tooltip="`Whether the text pattern is evaluated case-sensitively`">`Case:`</check-box>
 				</box>
-				<box field-name="`Test Text:`" layout="border" fill="true" visible="isTextFiltered">
+				<box field-name="`Test Text:`" layout="border" fill="true" visible="app.isTextFiltered">
 					<model>
-						<value name="isTextFiltered">config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty() &amp; config.fileTextRegex</value>
 						<value name="_testFileContent" type="String" />
 						<transform name="testFileContent" source="_testFileContent">
 							<refresh on="config.fileTextPattern" />
@@ -223,7 +223,8 @@
 					<text-field value="testFileContent" format="fileContentPatternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Enter text to test the text pattern against it`" />
 				</box>
-				<check-box value="config.multiContentMatches" field-name="`Multiple Text Matches:`" disable-with="app.searchUIEnabled" />
+				<check-box value="config.multiContentMatches" field-name="`Multiple Text Matches:`"
+					disable-with="app.searchUIEnabled || (app.isTextFiltered ? null : &quot;No text matcher specified&quot;)" />
 				<spacer length="3" />
 				<collapse-pane fill="true" name="debug">
 					<box role="header" layout="inline" orientation="vertical" main-align="center">
@@ -277,13 +278,10 @@
 							<check-box value="columnValue" />
 						</column-edit>
 					</column>
-					<!--TODO Add these back in 
-					<multi-value-action value-list-name="blah" icon="&quot;icons/add.png&quot;" action="config.excludedFileNames.create().create()"
+					<multi-value-action icon="&quot;icons/add.png&quot;" action="config.excludedFileNames.create().create()"
 						allow-for-empty="true" />
-					<!- TODO Won't this clear the entire list? ->
 					<multi-value-action icon="&quot;icons/remove.png&quot;"
-						action="config.excludedFileNames.getValues().removeAll(rows)" allow-for-empty="true" />
-					-->
+						action="config.excludedFileNames.getValues().removeAll(actionValues)" allow-for-empty="false" />
 				</table>
 				<spacer length="3" />
 				<box layout="inline" orientation="horizontal" main-align="center" fill="true">
@@ -299,10 +297,7 @@
 							icon="&quot;icons/icons8-&quot;+(result.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
 					</column>
 				</tree>
-				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify" visible="isTextFiltered">
-					<model>
-						<value name="isTextFiltered">config.fileTextPattern!=null &amp; !config.fileTextPattern.isEmpty() &amp; config.fileTextRegex</value>
-					</model>
+				<box layout="inline" orientation="vertical" main-align="justify" cross-align="justify" visible="app.isTextFiltered">
 					<label value="&quot;Text Matches In &quot;+app.selectedResult.getFile().getPath()"
 						visible="app.selectedResult!=null"/>
 					<table rows="app.textMatches" selection="app.selectedTextMatch">
