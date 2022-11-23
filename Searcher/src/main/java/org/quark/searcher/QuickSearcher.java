@@ -233,6 +233,51 @@ public class QuickSearcher {
 		int textMatches;
 	}
 
+	public String filePatternMatches(BetterFile test, String fileNamePattern, boolean fileNameRegex, boolean fileNameCaseSensitive) {
+		if (test == null) {
+			return null; // No test attempt--don't return an error
+		}
+		BetterFile searchBase = theSearchBase.get();
+		StringBuilder path = new StringBuilder();
+		BetterFile testF = test;
+		while (testF != null && !testF.equals(searchBase)) {
+			path.insert(0, '/').insert(0, test.getName());
+			testF = testF.getParent();
+		}
+		if (testF == null) {
+			return test.getPath()+" is not under search root "+searchBase.getPath();
+		}
+		System.out.println("test=" + test);
+		BetterPattern filePattern;
+		if (fileNamePattern == null || fileNamePattern.isEmpty()) {
+			filePattern = null;
+		} else if (!fileNameRegex) {
+			filePattern = new BetterPattern.SimpleStringSearch(fileNamePattern, fileNameCaseSensitive, true);
+		} else {
+			filePattern = filePattern(fileNamePattern, fileNameCaseSensitive);
+		}
+		if (filePattern.matcher(path).matches() != null) {
+			return null;
+		} else {
+			return test+" does not match pattern "+filePattern;
+		}
+	}
+
+	public boolean contentPatternMatches(String test, String contentPatternStr, boolean contentRegex, boolean contentCaseSensitive) {
+		if (test == null || test.isEmpty()) {
+			return true; // No test attempt-don't return an error
+		}
+		BetterPattern contentPattern;
+		if (contentPatternStr == null || contentPatternStr.isEmpty()) {
+			contentPattern = null;
+		} else if (!contentRegex) {
+			contentPattern = new BetterPattern.SimpleStringSearch(contentPatternStr, contentCaseSensitive, true);
+		} else {
+			contentPattern = filePattern(contentPatternStr, contentCaseSensitive);
+		}
+		return contentPattern.matcher(test).matches() != null;
+	}
+
 	public ObservableValue<SearchStatus> getStatus() {
 		return theStatus.unsettable();
 	}
@@ -259,8 +304,9 @@ public class QuickSearcher {
 			.combine((sb, fnp) -> {
 				if (sb == null) {
 					return "Choose a folder to search in";
-				} else if (fnp == null || fnp.isEmpty()) {
-					return "Select a valid file pattern";
+					// Can search with empty file pattern
+					// } else if (fnp == null || fnp.isEmpty()) {
+					// return "Select a valid file pattern";
 				} else {
 					return null;
 				}
@@ -270,7 +316,6 @@ public class QuickSearcher {
 
 	public ObservableValue<String> isSearchUiEnabled() {
 		return ObservableValue.firstValue(TypeTokens.get().STRING, s -> s != null, () -> null, //
-			isSearchEnabled(), //
 			theStatus.map(String.class, status -> {
 				switch (status) {
 				case Idle:
@@ -503,6 +548,31 @@ public class QuickSearcher {
 		pathSeq.setLength(prePathLen);
 	}
 
+	private void updateStatus() {
+		String status;
+		BetterFile f = theCurrentSearch;
+		if (f != null) {
+			status = f.getPath();
+		} else if (theSearchBase.get() == null) {
+			status = "No search root set";
+		} else if (!theSearchBase.get().exists()) {
+			status = theSearchBase.get() + " does not exist";
+		} else {
+			status = getIdleStatus();
+		}
+		theStatusMessage.set(status, null);
+	}
+
+	private String getIdleStatus() {
+		if (theSearchBase == null || theSearchBase.get() == null) {
+			return "Choose a folder to search in";
+		} else if (theFileNamePattern.get() == null) {
+			return "Select a valid file pattern";
+		} else {
+			return "Ready to search";
+		}
+	}
+
 	private static BetterPattern filePattern(String filePatternStr, boolean caseSensitive) {
 		filePatternStr = filePatternStr.replaceAll("//", "/.*/");
 		return BetterPattern.compile(filePatternStr, caseSensitive ? 0 : Pattern.CASE_INSENSITIVE);
@@ -728,28 +798,9 @@ public class QuickSearcher {
 		}
 	}
 
-	private void updateStatus() {
-		String status;
-		BetterFile f = theCurrentSearch;
-		if (f != null) {
-			status = f.getPath();
-		} else if (theSearchBase.get() == null) {
-			status = "No search root set";
-		} else if (!theSearchBase.get().exists()) {
-			status = theSearchBase.get() + " does not exist";
-		} else {
-			status = getIdleStatus();
-		}
-		theStatusMessage.set(status, null);
-	}
-
-	private String getIdleStatus() {
-		if (theSearchBase == null || theSearchBase.get() == null) {
-			return "Choose a folder to search in";
-		} else if (theFileNamePattern.get() == null) {
-			return "Select a valid file pattern";
-		} else {
-			return "Ready to search";
+	public static void initializeFileRequirements(Map<FileBooleanAttribute, FileAttributeRequirement> requirements) {
+		for (FileBooleanAttribute attr : FileBooleanAttribute.values()) {
+			requirements.computeIfAbsent(attr, __->FileAttributeRequirement.Maybe);
 		}
 	}
 }

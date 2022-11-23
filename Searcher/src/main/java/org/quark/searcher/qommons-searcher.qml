@@ -127,6 +127,8 @@
 						<map-with>QuickSearcher.renderTextResult(tm)</map-with>
 					</map-to>
 				</transform>-->
+				<hook name="initFileRequirements">QuickSearcher.initializeFileRequirements(config.fileRequirements)</hook>
+				<value name="fnpEmpty">config.fileNamePattern==null || config.fileNamePattern.isEmpty()</value>
 			</model>
 		</models>
 		<style-sheet>
@@ -154,20 +156,26 @@
 				<box field-name="`File Pattern:`" layout="inline" orientation="horizontal" main-align="justify" fill="true">
 					<text-field value="config.fileNamePattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Pattern of file names to search for`" />
-					<check-box value="config.fileNameRegex" disable-with="app.configurable"
+					<check-box value="config.fileNameRegex"
+						disable-with="app.configurable || (app.fnpEmpty ? &quot;No File Pattern&quot; : null)"
 						tooltip="`Whether the file pattern is evaluated as a regular expression`">`Regex:`</check-box>
-					<check-box value="config.fileNameCaseSensitive" disable-with="app.configurable"
+					<check-box value="config.fileNameCaseSensitive"
+						disable-with="app.configurable || (app.fnpEmpty ? &quot;No File Pattern&quot; : null)"
 						tooltip="`Whether the file pattern is evaluated case-sensitively`">`Case:`</check-box>
 				</box>
 				<box layout="inline" orientation="horizontal" main-align="justify" field-name="`Test File:`" fill="true"
-					visible="config.fileNamePattern!=null &amp; !config.fileNamePattern.isEmpty() &amp; config.fileNameRegex">
+					visible="!app.fnpEmpty &amp; config.fileNameRegex">
 					<model>
 						<value name="_testFilePath" type="BetterFile" />
 						<transform name="testFilePath" source="_testFilePath">
 							<refresh on="config.fileNamePattern" />
+							<refresh on="config.fileNameRegex" />
+							<refresh on="config.fileNameCaseSensitive" />
 						</transform>
-						<format name="fileNamePatternFormat" type="file" file-source="formats.files" working-dir="formats.workingDir">
-							<validate type="regex-validation" pattern="config.fileNamePattern" />
+						<format name="fileNamePatternFormat" type="file" file-source="formats.files" working-dir="formats.workingDir"
+							allow-empty="true">
+							<validate type="filter-validation" test="app.searcher.filePatternMatches(filterValue, config.fileNamePattern,
+							config.fileNameRegex, config.fileNameCaseSensitive)" />
 						</format>
 					</model>
 					<text-field value="testFilePath" format="fileNamePatternFormat" disable-with="app.searchUIEnabled"
@@ -204,9 +212,12 @@
 						<value name="_testFileContent" type="String" />
 						<transform name="testFileContent" source="_testFileContent">
 							<refresh on="config.fileTextPattern" />
+							<refresh on="config.fileTextRegex" />
+							<refresh on="config.fileTextCaseSensitive" />
 						</transform>
 						<format name="fileContentPatternFormat" type="text">
-							<validate type="regex-validation" pattern="config.fileTextPattern" />
+							<validate type="filter-validation" test="app.searcher.contentPatternMatches(filterValue, config.fileTextPattern,
+							config.fileTextRegex, config.fileTextCaseSensitive) ? null : &quot;Content does not match pattern&quot;" />
 						</format>
 					</model>
 					<text-field value="testFileContent" format="fileContentPatternFormat" disable-with="app.searchUIEnabled"

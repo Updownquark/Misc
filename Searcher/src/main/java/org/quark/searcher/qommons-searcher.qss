@@ -6,7 +6,7 @@
 			<style attr="color">`lime-green`</style>
 		</style>
 		<style condition="hovered">
-			<style attr="color">`green`</style>
+			<style attr="font-color">`green`</style>
 		</style>
 	</style>
 	<style element="field-panel" condition="pressed">
