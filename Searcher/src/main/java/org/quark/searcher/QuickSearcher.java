@@ -452,10 +452,6 @@ public class QuickSearcher {
 
 		int prePathLen = pathSeq.length();
 		pathSeq.append(file.getName());
-		boolean dir = file.isDirectory();
-		if (dir) {
-			pathSeq.append('/');
-		}
 		theCurrentSearch = file;
 		for (BetterPattern exclusion : theDynamicExclusionPatterns) {
 			if (testFileName(exclusion, pathSeq) != null) {
@@ -468,6 +464,10 @@ public class QuickSearcher {
 		}
 		if (isCanceling) {
 			return;
+		}
+		boolean dir = file.isDirectory();
+		if (dir) {
+			pathSeq.append('/');
 		}
 		SearchResultNode[] node = new SearchResultNode[1];
 		Match fileMatcher = testFileName(filePattern, pathSeq);

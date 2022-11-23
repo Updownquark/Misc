@@ -7,8 +7,7 @@
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
 	<head>
 		<imports>
-			<import>org.quark.searcher.QuickSearcher</import>
-			<import>org.quark.searcher.PatternConfig</import>
+			<import>org.quark.searcher.*</import>
 			<import>org.qommons.io.BetterFile</import>
 		</imports>
 		<models>
@@ -40,9 +39,9 @@
 				<value name="fileTextCaseSensitive" type="boolean" default="false" />
 				<value name="multiContentMatches" type="boolean" default="true" />
 				<value name="maxFileMatchLength" type="int" default="10000" />
-				<value-set name="excludedFileNames" type="org.quark.searcher.PatternConfig" />
-				<map name="fileRequirements" key-type="org.qommons.io.BetterFile.FileBooleanAttribute"
-					type="org.quark.searcher.FileAttributeRequirement" format="formats.fileReqFormat" />
+				<value-set name="excludedFileNames" type="PatternConfig" />
+				<map name="fileRequirements" key-type="BetterFile.FileBooleanAttribute" type="FileAttributeRequirement"
+					format="formats.fileReqFormat" />
 				<value name="minSize" type="double" default="0" />
 				<value name="maxSize" type="double" default="QuickSearcher.DEFAULT_MAX_SIZE" />
 				<value name="minLM" type="java.time.Instant" default="`Jan 01 1900 12:00am`" />
@@ -234,22 +233,22 @@
 						<text-field field-name="`Max Archive Depth:`" value="config.zipLevel" disable-with="app.searchUIEnabled" columns="8"
 							tooltip="`Maximum number of archives to descend into recursively`" />
 						<radio-buttons field-name="`Directory:`" value="config.fileRequirements.observe(Directory)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
+							values="FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be directories`" />
 						<radio-buttons field-name="`Readable:`" value="config.fileRequirements.observe(Readable)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
+							values="FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be readable`" />
 						<radio-buttons field-name="`Writable:`" value="config.fileRequirements.observe(Writable)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
+							values="FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be writable`" />
 						<radio-buttons field-name="`Hidden:`" value="config.fileRequirements.observe(Hidden)"
-							values="org.quark.searcher.FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
+							values="FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be hidden`" />
 						<box field-name="`Size:`" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="`Size range for matching files`">
-							<text-field value="config.minSize" format="formats.byteFormat" disable-with="app.searchUIEnabled" />
+							<text-field value="config.minSize" format="formats.byteFormat" disable-with="app.searchUIEnabled" columns="20" />
 							<label>...</label>
-							<text-field value="config.maxSize" format="formats.byteFormat" disable-with="app.searchUIEnabled" />
+							<text-field value="config.maxSize" format="formats.byteFormat" disable-with="app.searchUIEnabled" columns="20" />
 						</box>
 						<box field-name="`Last Modified:`" layout="inline" orientation="horizontal" main-align="justify" fill="true"
 							tooltip="`Last modified date range for matching files`">
@@ -268,14 +267,14 @@
 						<style attr="border-color" condition="hovered">`green`</style>
 					</titled-border>
 					<column name="Pattern" value="value.getPattern()">
-						<column-edit type="modify-row-value" commit="value.setPattern(columnValue)">
-							<text-field value="columnValue" format="formats.patternFormat" />
+						<column-edit type="modify-row-value" commit="value.setPattern(columnEditValue)">
+							<text-field value="columnEditValue" format="formats.patternFormat" />
 						</column-edit>
 					</column>
 					<column name="Case" value="value.isCaseSensitive()">
 						<check-box value="columnValue" />
-						<column-edit type="modify-row-value" commit="value.setCaseSensitive(columnValue)">
-							<check-box value="columnValue" />
+						<column-edit type="modify-row-value" commit="value.setCaseSensitive(columnEditValue)">
+							<check-box value="columnEditValue" />
 						</column-edit>
 					</column>
 					<multi-value-action icon="&quot;icons/add.png&quot;" action="config.excludedFileNames.create().create()"
