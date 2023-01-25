@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<!-- This is a header comment
+blah -->
+
 <quick uses:base="Quick-Base v0.1" uses:swing="Quick-Swing v0.1" uses:x="Quick-X v0.1" uses:expresso="Expresso-Config v0.1"
 	uses:exDebug="Expresso-Debug v0.1"
 	with-extension="swing:quick,window"
 	look-and-feel="system" title="`Qommons Searcher`"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
 	<head>
+		<?CONTENTLESS-INTRUCTION?>
+		<?INSTRUCTION ?>
+		<?INSTRUCTION CONTENT?>
 		<imports>
 			<import>org.quark.searcher.*</import>
 			<import>org.qommons.io.BetterFile</import>
@@ -46,7 +52,7 @@
 				<value name="maxSize" type="double" default="QuickSearcher.DEFAULT_MAX_SIZE" />
 				<value name="minLM" type="java.time.Instant" default="`Jan 01 1900 12:00am`" />
 				<value name="maxLM" type="java.time.Instant" default="`Jan 01 3000 12:00am`" />
-				<!-- TODO Filter accept the mins/maxes above to keep max&gt;min -->
+				<!-- TODO Filter accept the mins/maxes above to keep max>min -->
 
 				<value name="mainSplitDiv" type="double" default="25" />
 				<value name="rightSplitDiv" type="double" default="40" />
@@ -194,7 +200,9 @@
 					<model>
 						<first-value name="textPatternModEnabled">
 							<value>app.configurable</value>
-							<value>config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? &quot;No Text Pattern set&quot; : null</value>
+							<value><![CDATA[
+								config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? "No Text Pattern set" : null
+							]]></value>
 						</first-value>
 					</model>
 					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
@@ -291,7 +299,8 @@
 				<tree root="app.resultRoot" value-name="result" children="result.getChildren()"
 					selection="app.selectedResult" leaf="!result.getFile().isDirectory()">
 					<column name="Tree">
-						<!-- These icons are from https://icons8.com, specifically icon/11651/file and icon/21079/folder" -->
+						<!-- These icons are from https://icons8.com,
+							  specifically icon/11651/file and icon/21079/folder" -->
 						<label value="result.getFile().getName()"
 							icon="&quot;icons/icons8-&quot;+(result.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
 					</column>
@@ -312,3 +321,7 @@
 		<label value="app.statusMessage" />
 	</box>
 </quick>
+
+<!-- This is a footer comment
+blah -->
+
