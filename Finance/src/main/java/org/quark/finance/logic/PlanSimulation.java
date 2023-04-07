@@ -14,12 +14,18 @@ import java.util.TimeZone;
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.expresso.ExpressoEnv;
+import org.observe.expresso.ExpressoEvaluationException;
+import org.observe.expresso.ExpressoInterpretationException;
+import org.observe.expresso.ModelException;
+import org.observe.expresso.ModelInstantiationException;
 import org.observe.expresso.ModelType.ModelInstanceType;
 import org.observe.expresso.ModelTypes;
 import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet;
+import org.observe.expresso.ObservableModelSet.InterpretedModelSet;
 import org.observe.expresso.ObservableModelSet.ModelSetInstance;
 import org.observe.expresso.ObservableModelSet.ValueContainer;
+import org.observe.expresso.TypeConversionException;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.qommons.ArrayUtils;
@@ -29,7 +35,6 @@ import org.qommons.TimeUtils.ParsedDuration;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
 import org.qommons.collect.CircularArrayList;
-import org.qommons.config.QonfigInterpretationException;
 import org.qommons.threading.QommonsTimer;
 import org.quark.finance.entities.AssetGroup;
 import org.quark.finance.entities.Fund;
@@ -146,9 +151,25 @@ public class PlanSimulation {
 		for (Fund fund : results.funds) {
 			install(fund, modelBuilder, vblPath, visited, components, fundBalances, env);
 		}
-		env = env.with(modelBuilder.build(), null);
+		ObservableModelSet.Built builtModels = modelBuilder.build();
+		env = env.with(builtModels, null);
+		InterpretedModelSet interpretedModels;
+		try {
+			interpretedModels = builtModels.interpret();
+		} catch (ExpressoInterpretationException e) {
+			System.err.println("Could not interpret models");
+			e.printStackTrace();
+			return;
+		}
 
-		ModelSetInstance msi = env.getModels().createInstance(null, results.finished.noInitChanges()).build();
+		ModelSetInstance msi;
+		try {
+			msi = interpretedModels.createInstance(null, results.finished.noInitChanges()).build();
+		} catch (ModelInstantiationException e) {
+			System.err.println("Could not instantiate models");
+			e.printStackTrace();
+			return;
+		}
 		results.models = msi;
 
 		// Initialize fund balances
@@ -161,7 +182,8 @@ public class PlanSimulation {
 					fundBalances.get(fund.getName()).set(fund.getStartingBalance()//
 						.evaluate(MONEY_TYPE, env)//
 						.get(msi).get(), null);
-				} catch(QonfigInterpretationException e) {
+				} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException
+					| ModelInstantiationException e) {
 					ObservableSwingUtils.onEQ(()->fund.setError(e.getMessage()));
 				}
 			}
@@ -187,7 +209,7 @@ public class PlanSimulation {
 		SettableValue<Instant> currentDate;
 		try {
 			currentDate = env.getModels().getValue("CurrentDate", ModelTypes.Value.forType(Instant.class)).get(msi);
-		} catch (QonfigInterpretationException e) {
+		} catch (ExpressoInterpretationException | ModelException | TypeConversionException | ModelInstantiationException e) {
 			e.printStackTrace();
 			return;
 		}
@@ -342,7 +364,7 @@ public class PlanSimulation {
 					fundBalances.put(vbl.getName(), balance);
 					modelBuilder.with(vbl.getName(), ValueContainer.of(MONEY_TYPE, msi -> balance));
 				}
-			} catch (QonfigInterpretationException e) {
+			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException e) {
 				message = vbl.getName() + ": " + e.getMessage();
 			}
 		}
@@ -414,9 +436,17 @@ public class PlanSimulation {
 						lvErrors.add(vbl.getName());
 					}
 				}
-				ObservableModelSet wrapped = modelBuilder.build();
+				ObservableModelSet.Built wrapped = modelBuilder.build();
 				env = env.with(wrapped, null);
-				msi = wrapped.createInstance(msi.getUntil()).withAll(msi).build();
+				try {
+					msi = wrapped.interpret().createInstance(msi.getUntil()).withAll(msi).build();
+				} catch (ExpressoInterpretationException | ModelInstantiationException e) {
+					System.err.println("Could not interpret or instantiate models");
+					e.printStackTrace();
+					active = null;
+					start = end = null;
+					return;
+				}
 			}
 			for (int a = 0; a < actions.length; a++) {
 				if (actions[a].getFund() != null && actions[a].getAmount() != null) {
@@ -427,7 +457,8 @@ public class PlanSimulation {
 						if (actions[a].getError() != null) {
 							ObservableSwingUtils.onEQ(() -> actions[fa].setError(null));
 						}
-					} catch (QonfigInterpretationException e) {
+					} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
+						| ModelInstantiationException e) {
 						if (!e.getMessage().equals(actions[a].getError())) {
 							ObservableSwingUtils.onEQ(() -> actions[fa].setError(e.getMessage()));
 						}
@@ -443,7 +474,8 @@ public class PlanSimulation {
 			try {
 				start0 = process.getStart() == null ? null
 					: process.getStart().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
-			} catch (QonfigInterpretationException e) {
+			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
+				| ModelInstantiationException e) {
 				start0 = null;
 				error = new StringBuilder();
 				error.append("Start: ").append(e.getMessage());
@@ -453,7 +485,8 @@ public class PlanSimulation {
 			try {
 				end0 = process.getEnd() == null ? null
 					: process.getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
-			} catch (QonfigInterpretationException e) {
+			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
+				| ModelInstantiationException e) {
 				end0 = null;
 				if (error == null) {
 					error = new StringBuilder();
@@ -467,7 +500,8 @@ public class PlanSimulation {
 			try {
 				active0 = process.getActive() == null ? ObservableValue.of(true)
 					: process.getActive().evaluate(ModelTypes.Value.forType(boolean.class), env).get(msi);
-			} catch (QonfigInterpretationException e) {
+			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
+				| ModelInstantiationException e) {
 				active0 = ObservableValue.of(true);
 				if (error == null) {
 					error = new StringBuilder();

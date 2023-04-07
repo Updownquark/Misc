@@ -968,25 +968,26 @@ public class Finance extends JPanel {
 		} else if (!(exp instanceof NameExpression) || ((NameExpression) exp).getContext() != null) {
 			return exp;
 		}
+		NameExpression nameX = (NameExpression) exp;
 		PlanData data = thePlanData.get(plan.getId());
 		if (data == null) {
 			return exp;
 		}
-		BetterList<String> names = ((NameExpression) exp).getNames();
+		BetterList<String> names = nameX.getNames();
 		String name = names.getFirst();
 		if (persisting) {
 			PlanComponent comp = data.variablesByName.get(name);
 			if (comp != null) {
-				return new NamedEntityExpression<>(comp, "vbl");
+				return new NamedEntityExpression<>(comp, "vbl", exp.getExpressionOffset(), exp.getExpressionEnd());
 			}
 			comp = data.fundsByName.get(name);
 			if (comp != null) {
-				return new NamedEntityExpression<>(comp, "fund");
+				return new NamedEntityExpression<>(comp, "fund", exp.getExpressionOffset(), exp.getExpressionEnd());
 			}
 			if (process != null) {
 				for (ProcessVariable vbl : process.getLocalVariables().getValues()) {
 					if (name.equals(vbl.getName())) {
-						return new NamedEntityExpression<>(vbl, "pvbl");
+						return new NamedEntityExpression<>(vbl, "pvbl", exp.getExpressionOffset(), exp.getExpressionEnd());
 					}
 				}
 			}
@@ -998,8 +999,9 @@ public class Finance extends JPanel {
 				if (inst == null) {
 					throw new IllegalArgumentException("No such variable found with ID " + id);
 				}
-				NamedEntityExpression<PlanVariable> newExp = new NamedEntityExpression<>(inst, "vbl");
-				return names.size() == 1 ? newExp : new NameExpression(newExp, names.subList(1, names.size()));
+				NamedEntityExpression<PlanVariable> newExp = new NamedEntityExpression<>(inst, "vbl", exp.getExpressionOffset(),
+					exp.getExpressionEnd());
+				return names.size() == 1 ? newExp : new NameExpression(newExp, names.subList(1, names.size()), nameX.getNameOffsets());
 			}
 			m = FUND_PERSISTENCE_PATTERN.matcher(name);
 			if (m.matches()) {
@@ -1008,8 +1010,9 @@ public class Finance extends JPanel {
 				if (fund == null) {
 					throw new IllegalArgumentException("No such fund found with ID " + id);
 				}
-				NamedEntityExpression<Fund> newExp = new NamedEntityExpression<>(fund, "fund");
-				return names.size() == 1 ? newExp : new NameExpression(newExp, names.subList(1, names.size()));
+				NamedEntityExpression<Fund> newExp = new NamedEntityExpression<>(fund, "fund", exp.getExpressionOffset(),
+					exp.getExpressionEnd());
+				return names.size() == 1 ? newExp : new NameExpression(newExp, names.subList(1, names.size()), nameX.getNameOffsets());
 			}
 			if (process != null) {
 				m = PROC_VBL_PERSISTENCE_PATTERN.matcher(name);
@@ -1026,8 +1029,9 @@ public class Finance extends JPanel {
 						throw new IllegalArgumentException(
 							"No such local variable found for process " + process.getName() + " with ID " + id);
 					}
-					NamedEntityExpression<PlanVariable> newExp = new NamedEntityExpression<>(inst, "pvbl");
-					return names.size() == 1 ? newExp : new NameExpression(newExp, names.subList(1, names.size()));
+					NamedEntityExpression<PlanVariable> newExp = new NamedEntityExpression<>(inst, "pvbl", exp.getExpressionOffset(),
+						exp.getExpressionEnd());
+					return names.size() == 1 ? newExp : new NameExpression(newExp, names.subList(1, names.size()), nameX.getNameOffsets());
 				}
 			}
 		}

@@ -22,11 +22,13 @@ import javax.swing.JPanel;
 import org.observe.Observable;
 import org.observe.ObservableValue;
 import org.observe.collect.ObservableCollection;
+import org.observe.expresso.ModelException;
+import org.observe.expresso.ModelInstantiationException;
 import org.observe.expresso.ModelTypes;
+import org.observe.expresso.TypeConversionException;
 import org.qommons.ArrayUtils;
 import org.qommons.Colors;
 import org.qommons.TimeUtils;
-import org.qommons.config.QonfigInterpretationException;
 import org.quark.finance.entities.Plan;
 import org.quark.finance.entities.PlanComponent;
 import org.quark.finance.entities.PlanVariable;
@@ -108,7 +110,7 @@ public class TimelinePanel extends JPanel {
 						try {
 							vblTime = (Instant) results.getModels().getModel().getValue(vbl.getName(), ModelTypes.Value.any())
 								.get(results.getModels()).get();
-						} catch (QonfigInterpretationException ex) {
+						} catch (ModelException | TypeConversionException | ModelInstantiationException ex) {
 							ex.printStackTrace();
 							continue;
 						}
@@ -374,7 +376,7 @@ public class TimelinePanel extends JPanel {
 				try {
 					vblTime = (Instant) results.getModels().getModel().getValue(vbl.getName(), ModelTypes.Value.any())
 						.get(results.getModels()).get();
-				} catch (QonfigInterpretationException e) {
+				} catch (ModelException | TypeConversionException | ModelInstantiationException e) {
 					e.printStackTrace();
 					continue;
 				}

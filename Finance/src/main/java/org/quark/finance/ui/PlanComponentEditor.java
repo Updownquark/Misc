@@ -47,7 +47,7 @@ public abstract class PlanComponentEditor<E extends PlanComponent> extends PlanE
 			)//
 			.addLabel("Error: ", error, Format.TEXT, f -> f.fill()//
 				.visibleWhen(error.map(e -> e != null))//
-				.modifyFieldLabel(font -> font.bold().withColor(Color.red))//
+				.modifyFieldLabel(font -> font.bold().withForeground(Color.red))//
 				.decorate(deco -> deco.bold().withForeground(Color.red)))//
 		;
 	}
