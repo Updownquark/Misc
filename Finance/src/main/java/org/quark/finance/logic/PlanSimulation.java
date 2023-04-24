@@ -24,7 +24,7 @@ import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet;
 import org.observe.expresso.ObservableModelSet.InterpretedModelSet;
 import org.observe.expresso.ObservableModelSet.ModelSetInstance;
-import org.observe.expresso.ObservableModelSet.ValueContainer;
+import org.observe.expresso.ObservableModelSet.ModelValueSynth;
 import org.observe.expresso.TypeConversionException;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
@@ -180,7 +180,7 @@ public class PlanSimulation {
 			if(fundBalances.containsKey(fund.getName())) {
 				try {
 					fundBalances.get(fund.getName()).set(fund.getStartingBalance()//
-						.evaluate(MONEY_TYPE, env)//
+						.evaluate(MONEY_TYPE, env, 0)//
 						.get(msi).get(), null);
 				} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException
 					| ModelInstantiationException e) {
@@ -338,8 +338,8 @@ public class PlanSimulation {
 			}
 			try {
 				if (vbl instanceof PlanVariable) {
-					ObservableModelSet.ValueContainer<SettableValue<?>, SettableValue<?>> evaluated = value.evaluate(ModelTypes.Value.any(),
-						env);
+					ObservableModelSet.ModelValueSynth<SettableValue<?>, SettableValue<?>> evaluated = value.evaluate(ModelTypes.Value.any(),
+						env, 0);
 					modelBuilder.with(vbl.getName(), evaluated);
 					Class<?> type = TypeTokens.getRawType(evaluated.getType().getType(0));
 					PlanVariableType pvt;
@@ -362,7 +362,7 @@ public class PlanSimulation {
 						.withDescription(vbl.getName() + "_balance")//
 						.withValue(new Money(0)).build();
 					fundBalances.put(vbl.getName(), balance);
-					modelBuilder.with(vbl.getName(), ValueContainer.of(MONEY_TYPE, msi -> balance));
+					modelBuilder.with(vbl.getName(), ModelValueSynth.of(MONEY_TYPE, msi -> balance));
 				}
 			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException e) {
 				message = vbl.getName() + ": " + e.getMessage();
@@ -453,7 +453,7 @@ public class PlanSimulation {
 					int fa = a;
 					try {
 						this.actions[a] = new ProcessActionData(a, actions[a].getFund(), //
-							actions[a].getAmount().evaluate(ModelTypes.Value.forType(Money.class), env).get(msi));
+							actions[a].getAmount().evaluate(ModelTypes.Value.forType(Money.class), env, 0).get(msi));
 						if (actions[a].getError() != null) {
 							ObservableSwingUtils.onEQ(() -> actions[fa].setError(null));
 						}
@@ -473,7 +473,7 @@ public class PlanSimulation {
 			Instant start0;
 			try {
 				start0 = process.getStart() == null ? null
-					: process.getStart().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
+					: process.getStart().evaluate(ModelTypes.Value.forType(Instant.class), env, 0).get(msi).get();
 			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
 				| ModelInstantiationException e) {
 				start0 = null;
@@ -484,7 +484,7 @@ public class PlanSimulation {
 			Instant end0;
 			try {
 				end0 = process.getEnd() == null ? null
-					: process.getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env).get(msi).get();
+					: process.getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env, 0).get(msi).get();
 			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
 				| ModelInstantiationException e) {
 				end0 = null;
@@ -499,7 +499,7 @@ public class PlanSimulation {
 			ObservableValue<Boolean> active0;
 			try {
 				active0 = process.getActive() == null ? ObservableValue.of(true)
-					: process.getActive().evaluate(ModelTypes.Value.forType(boolean.class), env).get(msi);
+					: process.getActive().evaluate(ModelTypes.Value.forType(boolean.class), env, 0).get(msi);
 			} catch (ExpressoInterpretationException | TypeConversionException | ExpressoEvaluationException
 				| ModelInstantiationException e) {
 				active0 = ObservableValue.of(true);
