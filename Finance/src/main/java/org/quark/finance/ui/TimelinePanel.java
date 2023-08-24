@@ -21,11 +21,9 @@ import javax.swing.JPanel;
 
 import org.observe.Observable;
 import org.observe.ObservableValue;
+import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
-import org.observe.expresso.ModelException;
 import org.observe.expresso.ModelInstantiationException;
-import org.observe.expresso.ModelTypes;
-import org.observe.expresso.TypeConversionException;
 import org.qommons.ArrayUtils;
 import org.qommons.Colors;
 import org.qommons.TimeUtils;
@@ -102,15 +100,14 @@ public class TimelinePanel extends JPanel {
 						continue;
 					}
 					double length = TimeUtils.toSeconds(TimeUtils.between(startV, endV));
-					for (PlanVariable vbl : results.plan.getVariables().getValues()) {
+					for (PlanVariable vbl : results.simulation.getPlan().getVariables().getValues()) {
 						if (!vbl.isShown() || vbl.getError() != null || vbl.getVariableType() != PlanVariableType.Instant) {
 							continue;
 						}
 						Instant vblTime;
 						try {
-							vblTime = (Instant) results.getModels().getModel().getValue(vbl.getName(), ModelTypes.Value.any())
-								.get(results.getModels()).get();
-						} catch (ModelException | TypeConversionException | ModelInstantiationException ex) {
+							vblTime = ((SettableValue<Instant>) results.getModels().get(results.simulation.getVariable(vbl.getName()))).get();
+						} catch (ModelInstantiationException ex) {
 							ex.printStackTrace();
 							continue;
 						}
@@ -368,15 +365,14 @@ public class TimelinePanel extends JPanel {
 			if (results.getModels() == null || !results.finished.get()) {
 				continue;
 			}
-			for (PlanVariable vbl : results.plan.getVariables().getValues()) {
+			for (PlanVariable vbl : results.simulation.getPlan().getVariables().getValues()) {
 				if (!vbl.isShown() || vbl.getError() != null || vbl.getVariableType() != PlanVariableType.Instant) {
 					continue;
 				}
 				Instant vblTime;
 				try {
-					vblTime = (Instant) results.getModels().getModel().getValue(vbl.getName(), ModelTypes.Value.any())
-						.get(results.getModels()).get();
-				} catch (ModelException | TypeConversionException | ModelInstantiationException e) {
+					vblTime = ((SettableValue<Instant>) results.getModels().get(results.simulation.getVariable(vbl.getName()))).get();
+				} catch (ModelInstantiationException e) {
 					e.printStackTrace();
 					continue;
 				}

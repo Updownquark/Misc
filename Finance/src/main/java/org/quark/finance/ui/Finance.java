@@ -32,11 +32,13 @@ import org.observe.config.ObservableConfigParseSession;
 import org.observe.config.ObservableValueSet;
 import org.observe.config.ValueOperationException;
 import org.observe.expresso.ClassView;
-import org.observe.expresso.ExpressoEnv;
+import org.observe.expresso.InterpretedExpressoEnv;
 import org.observe.expresso.JavaExpressoParser;
+import org.observe.expresso.ModelInstantiationException;
 import org.observe.expresso.NonStructuredParser;
 import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet;
+import org.observe.expresso.ObservableModelSet.InterpretedValueSynth;
 import org.observe.expresso.ops.BinaryOperatorSet;
 import org.observe.expresso.ops.BufferedName;
 import org.observe.expresso.ops.NameExpression;
@@ -58,7 +60,9 @@ import org.qommons.TimeUtils.ParsedDuration;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.ElementId;
+import org.qommons.io.ErrorReporting;
 import org.qommons.io.Format;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.SpinnerFormat;
 import org.quark.finance.entities.AssetGroup;
 import org.quark.finance.entities.Fund;
@@ -127,7 +131,7 @@ public class Finance extends JPanel {
 	private final ObservableCollection<PlanItem> theItemSimResults;
 	private final SettableValue<BetterList<Object>> theTreeSelection;
 
-	private final ExpressoEnv theExpressionEnv;
+	private final InterpretedExpressoEnv theExpressionEnv;
 
 	public Finance(ObservableConfig config) {
 		theConfig = config;
@@ -373,9 +377,21 @@ public class Finance extends JPanel {
 			}
 
 			@Override
-			public <T> ObservableValue<? extends T> parse(TypeToken<T> type, String text) throws ParseException {
-				return (ObservableValue<T>) ObservableValue.of(Money.class,
-					new Money(Math.round(Double.parseDouble(text.substring(1, text.length())) * 100)));
+			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text)
+				throws ParseException {
+				Money value = new Money(Math.round(Double.parseDouble(text.substring(1, text.length())) * 100));
+				return (InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>>) InterpretedValueSynth
+					.literalValue(TypeTokens.get().of(Money.class), value, text);
+			}
+
+			@Override
+			public String getDescription() {
+				return "Money literal parser";
+			}
+
+			@Override
+			public String toString() {
+				return getDescription();
 			}
 		};
 		NonStructuredParser instantParser = new NonStructuredParser() {
@@ -383,7 +399,7 @@ public class Finance extends JPanel {
 			public boolean canParse(TypeToken<?> type, String text) {
 				if (type.getType() == Instant.class) {
 					return true;
-				} else if (!type.isAssignableFrom(Instant.class)) {
+				} else if (!TypeTokens.get().isAssignable(type, TypeTokens.get().of(Instant.class))) {
 					return false;
 				} else {
 					try {
@@ -395,9 +411,21 @@ public class Finance extends JPanel {
 			}
 
 			@Override
-			public <T> ObservableValue<? extends T> parse(TypeToken<T> type, String text) throws ParseException {
-				return (ObservableValue<T>) ObservableValue.of(Instant.class,
-					TimeUtils.parseInstant(text, true, true, null).evaluate(Instant::now));
+			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text)
+				throws ParseException {
+				Instant value = TimeUtils.parseInstant(text, true, true, null).evaluate(Instant::now);
+				return (InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>>) InterpretedValueSynth
+					.literalValue(TypeTokens.get().of(Instant.class), value, text);
+			}
+
+			@Override
+			public String getDescription() {
+				return "Instant literal parser";
+			}
+
+			@Override
+			public String toString() {
+				return getDescription();
 			}
 		};
 		NonStructuredParser durationParser = new NonStructuredParser() {
@@ -405,7 +433,7 @@ public class Finance extends JPanel {
 			public boolean canParse(TypeToken<?> type, String text) {
 				if (type.getType() == ParsedDuration.class) {
 					return true;
-				} else if (!type.isAssignableFrom(ParsedDuration.class)) {
+				} else if (!TypeTokens.get().isAssignable(type, TypeTokens.get().of(ParsedDuration.class))) {
 					return false;
 				} else {
 					try {
@@ -417,48 +445,63 @@ public class Finance extends JPanel {
 			}
 
 			@Override
-			public <T> ObservableValue<? extends T> parse(TypeToken<T> type, String text) throws ParseException {
-				return (ObservableValue<T>) ObservableValue.of(ParsedDuration.class, TimeUtils.parseDuration(text, true, true));
+			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text)
+				throws ParseException {
+				ParsedDuration value = TimeUtils.parseDuration(text, true, true);
+				return (InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>>) InterpretedValueSynth
+					.literalValue(TypeTokens.get().of(ParsedDuration.class), value, text);
+			}
+
+			@Override
+			public String getDescription() {
+				return "Flexible duration literal";
+			}
+
+			@Override
+			public String toString() {
+				return getDescription();
 			}
 		};
 
-		theExpressionEnv = new ExpressoEnv(null, ClassView.build()//
+		theExpressionEnv = InterpretedExpressoEnv.INTERPRETED_STANDARD_JAVA.with(ClassView.build()//
 			.withWildcardImport("java.lang")//
 			.withWildcardImport("java.lang.Math")//
 			.withWildcardImport(FinanceFunctions.class.getName())//
-			.build(), FINANCE_UNARY_OPS, FINANCE_BINARY_OPS)//
-				.withNonStructuredParser(Money.class, moneyParser)//
-				.withNonStructuredParser(Object.class, moneyParser)//
-				.withNonStructuredParser(Instant.class, instantParser)//
-				.withNonStructuredParser(Object.class, instantParser)//
-				.withNonStructuredParser(Duration.class, durationParser)//
-				.withNonStructuredParser(Object.class, durationParser)//
+			.build())//
+			.withOperators(FINANCE_UNARY_OPS, FINANCE_BINARY_OPS)//
+			.withErrorReporting(new ErrorReporting.Default(LocatedPositionedContent.of("Quark Finance", null)))//
+			.withNonStructuredParser(Money.class, moneyParser)//
+			.withNonStructuredParser(Object.class, moneyParser)//
+			.withNonStructuredParser(Instant.class, instantParser)//
+			.withNonStructuredParser(Object.class, instantParser)//
+			.withNonStructuredParser(Duration.class, durationParser)//
+			.withNonStructuredParser(Object.class, durationParser)//
 		;
 
 		theSimResults = visiblePlans.flow()//
 			.refresh(Observable.or(theStart.noInitChanges(), theEnd.noInitChanges(), theResolution.noInitChanges())//
 				.filterMap(evt -> !Objects.equals(evt.getOldValue(), evt.getNewValue())))//
 			.transform(PlanSimulation.SimulationResults.class, tx -> tx.cache(true).reEvalOnUpdate(true)//
-				.map(plan -> PlanSimulation.simulate(plan, theStart.get(), theEnd.get(), theResolution.get(), theExpressionEnv)))//
-			.refreshEach(results -> results.finished.noInitChanges())//
+				.build((plan, txValues) -> simulate(plan, txValues.getPreviousResult())))//
+			.refreshEach(results -> results == null ? null : results.finished.noInitChanges())//
 			.collect();
 		theItemSimResults = theSimResults.flow()//
 			.flatMap(PlanItem.class, planRes -> ObservableCollection.flattenCollections(PlanItem.class, //
-				countTo(planRes.funds.length).flow()//
+				planRes == null ? null : countTo(planRes.funds.length).flow()//
 					.map(PlanItem.class,
 						fundIdx -> new PlanItem(planRes, planRes.funds[fundIdx], null, true, planRes.fundBalances[fundIdx]))//
 					.collect(), //
-				countTo(planRes.funds.length).flow()//
+				planRes == null ? null : countTo(planRes.funds.length).flow()//
 					.flatMap(PlanItem.class, fundIdx -> countTo(planRes.processes.length).flow()//
 						.map(PlanItem.class, procIdx -> new PlanItem(planRes, planRes.funds[fundIdx], planRes.processes[procIdx], false,
 							planRes.fundProcessContributions[fundIdx][procIdx]))//
 					)//
 					.collect(), //
-				countTo(planRes.processes.length).flow()//
+				planRes == null ? null : countTo(planRes.processes.length).flow()//
 					.map(PlanItem.class,
 						procIdx -> new PlanItem(planRes, planRes.processes[procIdx], null, false, planRes.processAmounts[procIdx]))//
 					.collect(), //
-				countTo(planRes.processes.length).flow()//
+				planRes == null ? null : countTo(planRes.processes.length).flow()//
 					.flatMap(PlanItem.class, procIdx -> countTo(planRes.processActions[procIdx].length).flow()//
 						.map(PlanItem.class, actionIdx -> new PlanItem(planRes, planRes.processes[procIdx],
 							planRes.processActions[procIdx][actionIdx], false, planRes.processActionAmounts[procIdx][actionIdx]))//
@@ -469,6 +512,33 @@ public class Finance extends JPanel {
 
 		theTreeSelection = SettableValue.build((Class<BetterList<Object>>) (Class<?>) BetterList.class).build();
 		initComponents();
+	}
+
+
+	PlanSimulation.SimulationResults simulate(Plan plan, SimulationResults previousResults) {
+		if (previousResults != null && !previousResults.finished.get()) {
+			return previousResults;
+		}
+		PlanSimulation sim = new PlanSimulation(plan, theExpressionEnv);
+		PlanSimulation.Interpreted interpreted;
+		try {
+			interpreted = sim.interpret(theExpressionEnv);
+		} catch (Throwable e) {
+			e.printStackTrace();
+			return null;
+		}
+		PlanSimulation.Instantiator instantiator = interpreted.instantiate();
+		instantiator.instantiate();
+		SimpleObservable<Void> until = new SimpleObservable<>();
+		PlanSimulation.Instance instance;
+		try {
+			instance = instantiator.create(until);
+		} catch (ModelInstantiationException e) {
+			e.printStackTrace();
+			return null;
+		}
+		return instance.run(//
+			theStart.get(), theEnd.get(), theResolution.get());
 	}
 
 	static ObservableCollection<Integer> countTo(int upTo) {
@@ -800,9 +870,10 @@ public class Finance extends JPanel {
 					}
 					group.getPlan().getGroups().getValues().remove(group);
 				}
-			}, action -> action.allowForEmpty(false).allowForMultiple(false).allowWhen(
-				path -> path.getLast() instanceof Plan || path.getLast() instanceof PlanComponent ? null : "Placeholder--cannot delete",
-				null)//
+			}, action -> action.allowForEmpty(false).allowForMultiple(false)
+				.allowWhen(
+					path -> path.getLast() instanceof Plan || path.getLast() instanceof PlanComponent ? null : "Placeholder--cannot delete",
+					null)//
 				.displayAsButton(true).displayAsPopup(false).displayWhenDisabled(false)//
 				.modifyButton(btn -> btn.withIcon(ObservableSwingUtils.class, "icons/remove.png", 16, 16))//
 			)//
@@ -901,8 +972,8 @@ public class Finance extends JPanel {
 	}
 
 	private static UnaryOperatorSet.Builder configureFinanceUnaryOps(UnaryOperatorSet.Builder ops) {
-		ops.withSymmetric("-", Money.class, m -> new Money(-m.value));
-		ops.withSymmetric("-", ParsedDuration.class, d -> d.negate());
+		ops.withSymmetric("-", Money.class, m -> new Money(-m.value), "Monetary negation");
+		ops.withSymmetric("-", ParsedDuration.class, d -> d.negate(), "Duration negation");
 		return ops;
 	}
 
@@ -911,26 +982,32 @@ public class Finance extends JPanel {
 		// Nothing is reversible here, since this app doesn't allow assigning an expression to a value
 		return ops//
 					// Money operations
-			.with("+", Money.class, Money.class, (m1, m2) -> new Money(m1.value + m2.value), null, null)//
-			.with("-", Money.class, Money.class, (m1, m2) -> new Money(m1.value - m2.value), null, null)//
-			.with("*", Money.class, double.class, (m1, mult) -> new Money(Math.round(m1.value * mult)), null, null)//
-			.with2("*", double.class, Money.class, Money.class, (mult, m1) -> new Money(Math.round(m1.value * mult)), null, null)//
-			.with2("*", int.class, Money.class, Money.class, (mult, m1) -> new Money(Math.round(m1.value * mult)), null, null)//
-			.with("/", Money.class, double.class, (m1, div) -> new Money(Math.round(m1.value / div)), null, null)//
+			.with("+", Money.class, Money.class, (m1, m2) -> new Money(m1.value + m2.value), null, null, "Monetary addition")//
+			.with("-", Money.class, Money.class, (m1, m2) -> new Money(m1.value - m2.value), null, null, "Monetary subtraction")//
+			.with("*", Money.class, double.class, (m1, mult) -> new Money(Math.round(m1.value * mult)), null, null,
+				"Monetary multiplication")//
+			.with2("*", double.class, Money.class, Money.class, (mult, m1) -> new Money(Math.round(m1.value * mult)), null, null,
+				"Monetary multiplication")//
+			.with2("*", int.class, Money.class, Money.class, (mult, m1) -> new Money(Math.round(m1.value * mult)), null, null,
+				"Monetary multiplication")//
+			.with("/", Money.class, double.class, (m1, div) -> new Money(Math.round(m1.value / div)), null, null, "Monetary division")//
 			// Instant operations
-			.with("+", Instant.class, ParsedDuration.class, (t, d) -> d.addTo(t, timeZone), null, null)//
-			.with2("+", ParsedDuration.class, Instant.class, Instant.class, (d, t) -> d.addTo(t, timeZone), null, null)//
-			.with("-", Instant.class, ParsedDuration.class, (t, d) -> d.negate().addTo(t, timeZone), null, null)//
+			.with("+", Instant.class, ParsedDuration.class, (t, d) -> d.addTo(t, timeZone), null, null, "Instant addition")//
+			.with2("+", ParsedDuration.class, Instant.class, Instant.class, (d, t) -> d.addTo(t, timeZone), null, null, "Instant addition")//
+			.with("-", Instant.class, ParsedDuration.class, (t, d) -> d.negate().addTo(t, timeZone), null, null, "Instant subtraction")//
 			.with2("-", Instant.class, Instant.class, ParsedDuration.class, (i1, i2) -> TimeUtils.asFlexDuration(TimeUtils.between(i2, i1)),
-				null, null)//
+				null, null, "Instant subtraction")//
 			// Duration operations
-			.with("+", ParsedDuration.class, ParsedDuration.class, (d1, d2) -> d1.plus(d1), null, null)//
-			.with("-", ParsedDuration.class, ParsedDuration.class, (d1, d2) -> d1.plus(d1.negate()), null, null)//
-			.with("*", ParsedDuration.class, double.class, (d, mult) -> d.times(mult), null, null)//
-			.with2("*", double.class, ParsedDuration.class, ParsedDuration.class, (mult, d) -> d.times(mult), null, null)//
-			.with2("*", int.class, ParsedDuration.class, ParsedDuration.class, (mult, d) -> d.times(mult), null, null)//
-			.with("/", ParsedDuration.class, double.class, (d, div) -> d.times(1 / div), null, null)//
-			.with2("/", ParsedDuration.class, ParsedDuration.class, double.class, (d, div) -> d.divide(div), null, null)//
+			.with("+", ParsedDuration.class, ParsedDuration.class, (d1, d2) -> d1.plus(d1), null, null, "Duration addition")//
+			.with("-", ParsedDuration.class, ParsedDuration.class, (d1, d2) -> d1.plus(d1.negate()), null, null, "Duration subtraction")//
+			.with("*", ParsedDuration.class, double.class, (d, mult) -> d.times(mult), null, null, "Duration multiplication")//
+			.with2("*", double.class, ParsedDuration.class, ParsedDuration.class, (mult, d) -> d.times(mult), null, null,
+				"Duration multiplication")//
+			.with2("*", int.class, ParsedDuration.class, ParsedDuration.class, (mult, d) -> d.times(mult), null, null,
+				"Duration multiplication")//
+			.with("/", ParsedDuration.class, double.class, (d, div) -> d.times(1 / div), null, null, "Duration division")//
+			.with2("/", ParsedDuration.class, ParsedDuration.class, double.class, (d, div) -> d.divide(div), null, null,
+				"Duration division")//
 		;
 	}
 
@@ -1050,9 +1127,9 @@ public class Finance extends JPanel {
 				}
 				Object search;
 				if (comp instanceof ProcessVariable) {
-					search=((ProcessVariable) comp).getProcess();
+					search = ((ProcessVariable) comp).getProcess();
 				} else {
-					search=comp.getPlan();
+					search = comp.getPlan();
 				}
 				if (search != null) {
 					replaceEntity(search, comp);
@@ -1108,7 +1185,7 @@ public class Finance extends JPanel {
 		} else if (exp instanceof NamedEntityExpression && ((NamedEntityExpression<?>) exp).getEntity() == comp) {
 			return true;
 		}
-		for (ObservableExpression child : exp.getChildren()) {
+		for (ObservableExpression child : exp.getComponents()) {
 			if (hasEntity(child, comp)) {
 				return true;
 			}

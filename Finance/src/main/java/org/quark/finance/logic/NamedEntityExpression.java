@@ -4,16 +4,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import org.observe.expresso.ExpressoEnv;
+import org.observe.expresso.CompiledExpressoEnv;
 import org.observe.expresso.ExpressoEvaluationException;
 import org.observe.expresso.ExpressoInterpretationException;
+import org.observe.expresso.InterpretedExpressoEnv;
 import org.observe.expresso.ModelException;
 import org.observe.expresso.ModelType;
 import org.observe.expresso.ModelType.ModelInstanceType;
 import org.observe.expresso.ModelTypes;
 import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet.InterpretedValueSynth;
-import org.observe.expresso.ObservableModelSet.ModelValueSynth;
 import org.observe.expresso.TypeConversionException;
 import org.qommons.Transaction;
 import org.quark.finance.entities.PlanComponent;
@@ -39,7 +39,7 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	}
 
 	@Override
-	public ModelType<?> getModelType(ExpressoEnv env) {
+	public ModelType<?> getModelType(CompiledExpressoEnv env, int expressionOffset) {
 		return ModelTypes.Value;
 	}
 
@@ -49,7 +49,7 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	}
 
 	@Override
-	public int getChildOffset(int childIndex) {
+	public int getComponentOffset(int childIndex) {
 		throw new IndexOutOfBoundsException(childIndex + " of 0");
 	}
 
@@ -58,7 +58,7 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	}
 
 	@Override
-	public List<? extends ObservableExpression> getChildren() {
+	public List<? extends ObservableExpression> getComponents() {
 		return Collections.emptyList();
 	}
 
@@ -68,19 +68,27 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	}
 
 	@Override
-	public <M, MV extends M> InterpretedValueSynth<M, MV> evaluate(ModelInstanceType<M, MV> type, ExpressoEnv env, int expressionOffset)
+	public <M, MV extends M> EvaluatedExpression<M, MV> evaluate(ModelInstanceType<M, MV> type, InterpretedExpressoEnv env,
+		int expressionOffset)
 		throws ExpressoEvaluationException, ExpressoInterpretationException, TypeConversionException {
 		try {
-			return env.getModels().getValue(theEntity.getName(), type);
+			return ObservableExpression.evEx(expressionOffset, getExpressionLength(), //
+				env.getModels().getValue(theEntity.getName(), type, env), this);
 		} catch (ModelException e) {
 			throw new ExpressoEvaluationException(0, getExpressionLength(), "No such model value: " + theEntity.getName(), e);
 		}
 	}
 
 	@Override
-	public <M, MV extends M> ModelValueSynth<M, MV> evaluateInternal(ModelInstanceType<M, MV> type, ExpressoEnv env, int expressionOffset)
+	public <M, MV extends M> EvaluatedExpression<M, MV> evaluateInternal(ModelInstanceType<M, MV> type, InterpretedExpressoEnv env,
+		int expressionOffset)
 		throws ExpressoEvaluationException, ExpressoInterpretationException {
-		throw new IllegalStateException();
+		try {
+			return ObservableExpression.evEx(expressionOffset, getExpressionLength(), //
+				(InterpretedValueSynth<M, MV>) env.getModels().getComponent(theEntity.getName()).interpret(env), this);
+		} catch (ModelException e) {
+			throw new ExpressoEvaluationException(0, getExpressionLength(), "No such model value: " + theEntity.getName(), e);
+		}
 	}
 
 	@Override
