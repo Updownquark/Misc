@@ -16,6 +16,7 @@ import org.observe.expresso.ObservableExpression;
 import org.observe.expresso.ObservableModelSet.InterpretedValueSynth;
 import org.observe.expresso.TypeConversionException;
 import org.qommons.Transaction;
+import org.qommons.ex.ExceptionHandler;
 import org.quark.finance.entities.PlanComponent;
 
 public class NamedEntityExpression<E extends PlanComponent> implements ObservableExpression {
@@ -68,21 +69,24 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	}
 
 	@Override
-	public <M, MV extends M> EvaluatedExpression<M, MV> evaluate(ModelInstanceType<M, MV> type, InterpretedExpressoEnv env,
-		int expressionOffset)
-		throws ExpressoEvaluationException, ExpressoInterpretationException, TypeConversionException {
+	public <M, MV extends M, TX extends Throwable> EvaluatedExpression<M, MV> evaluate(ModelInstanceType<M, MV> type,
+		InterpretedExpressoEnv env, int expressionOffset, ExceptionHandler.Single<TypeConversionException, TX> exHandler)
+		throws ExpressoEvaluationException, ExpressoInterpretationException, TX {
 		try {
 			return ObservableExpression.evEx(expressionOffset, getExpressionLength(), //
 				env.getModels().getValue(theEntity.getName(), type, env), this);
 		} catch (ModelException e) {
 			throw new ExpressoEvaluationException(0, getExpressionLength(), "No such model value: " + theEntity.getName(), e);
+		} catch (TypeConversionException e) {
+			exHandler.handle1(e);
+			return null;
 		}
 	}
 
 	@Override
-	public <M, MV extends M> EvaluatedExpression<M, MV> evaluateInternal(ModelInstanceType<M, MV> type, InterpretedExpressoEnv env,
-		int expressionOffset)
-		throws ExpressoEvaluationException, ExpressoInterpretationException {
+	public <M, MV extends M, TX extends Throwable> EvaluatedExpression<M, MV> evaluateInternal(ModelInstanceType<M, MV> type,
+		InterpretedExpressoEnv env, int expressionOffset, ExceptionHandler.Single<TypeConversionException, TX> exHandler)
+		throws ExpressoEvaluationException, ExpressoInterpretationException, TX {
 		try {
 			return ObservableExpression.evEx(expressionOffset, getExpressionLength(), //
 				(InterpretedValueSynth<M, MV>) env.getModels().getComponent(theEntity.getName()).interpret(env), this);
@@ -104,7 +108,7 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	@Override
 	public String toString() {
 		if (isPersisting()) {
-			return thePersistencePrefix+theEntity.getId();
+			return thePersistencePrefix + theEntity.getId();
 		} else {
 			return theEntity.getName();
 		}

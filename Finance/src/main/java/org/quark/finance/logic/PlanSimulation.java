@@ -37,6 +37,7 @@ import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils.ParsedDuration;
 import org.qommons.collect.CircularArrayList;
+import org.qommons.ex.ExceptionHandler;
 import org.qommons.io.FilePosition;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.threading.QommonsTimer;
@@ -75,8 +76,9 @@ public class PlanSimulation {
 
 		ObservableModelSet.Builder modelBuilder = ObservableModelSet.build("simulation", ObservableModelSet.JAVA_NAME_CHECKER);
 		env = env.with(modelBuilder);
-		modelBuilder.with("CurrentDate", InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
-			SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(plan.getCurrentDate()).build(), "CurrentDate"),
+		modelBuilder.with("CurrentDate",
+			InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
+				SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(plan.getCurrentDate()).build(), "CurrentDate"),
 			null);
 		theVariables.put("CurrentDate", modelBuilder.getLocalComponent("CurrentDate").getIdentity());
 		modelBuilder.with("PlanStart", InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
@@ -387,7 +389,8 @@ public class PlanSimulation {
 					return InterpretedValueSynth.literalValue(TypeTokens.get().INT, 0, "Missing value");
 				}
 				try {
-					InterpretedValueSynth<SettableValue<?>, ?> interpreted = value.evaluate(ModelTypes.Value.any(), iEnv, 0);
+					InterpretedValueSynth<SettableValue<?>, ?> interpreted = value.evaluate(ModelTypes.Value.any(), iEnv, 0,
+						ExceptionHandler.get1());
 					Class<?> type = TypeTokens.get().wrap(TypeTokens.getRawType(interpreted.getType().getType(0)));
 					if (Number.class.isAssignableFrom(type)) {
 						EventQueue.invokeLater(() -> ((PlanVariable) vbl).setVariableType(PlanVariableType.Number));
@@ -416,7 +419,7 @@ public class PlanSimulation {
 			modelBuilder.withMaker(vbl.getName(), CompiledModelValue.of(vbl.getName(), ModelTypes.Value, iEnv -> {
 				InterpretedValueSynth<SettableValue<?>, SettableValue<Money>> interpretedInitBalance;
 				try {
-					interpretedInitBalance = value == null ? null : value.evaluate(MONEY_TYPE, iEnv, 0);
+					interpretedInitBalance = value == null ? null : value.evaluate(MONEY_TYPE, iEnv, 0, ExceptionHandler.get1());
 				} catch (ExpressoEvaluationException e) {
 					error(vbl, e.getMessage(), false);
 					int pos = e.getErrorOffset();
@@ -514,8 +517,8 @@ public class PlanSimulation {
 			theProcessIndex = process.getPlan().getProcesses().getValues().indexOf(process);
 			theVariables = new LinkedHashMap<>();
 			if (!process.getLocalVariables().getValues().isEmpty()) {
-				ObservableModelSet.Builder modelBuilder = ObservableModelSet.build("process[" + process.getName() + "].local",
-					ObservableModelSet.JAVA_NAME_CHECKER)//
+				ObservableModelSet.Builder modelBuilder = ObservableModelSet
+					.build("process[" + process.getName() + "].local", ObservableModelSet.JAVA_NAME_CHECKER)//
 					.withAll(env.getModels());
 				env = env.with(modelBuilder);
 				for (PlanVariable vbl : process.getLocalVariables().getValues()) {
@@ -581,7 +584,8 @@ public class PlanSimulation {
 
 				if (definition.getProcess().getStart() != null) {
 					try {
-						start = definition.getProcess().getStart().evaluate(ModelTypes.Value.forType(Instant.class), env, 0);
+						start = definition.getProcess().getStart().evaluate(ModelTypes.Value.forType(Instant.class), env, 0,
+							ExceptionHandler.get1());
 					} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
@@ -591,7 +595,8 @@ public class PlanSimulation {
 
 				if (definition.getProcess().getEnd() != null) {
 					try {
-						end = definition.getProcess().getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env, 0);
+						end = definition.getProcess().getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env, 0,
+							ExceptionHandler.get1());
 					} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
@@ -601,13 +606,14 @@ public class PlanSimulation {
 
 				if (definition.getProcess().getActive() != null) {
 					try {
-						active = definition.getProcess().getActive().evaluate(ModelTypes.Value.forType(boolean.class), env, 0);
+						active = definition.getProcess().getActive().evaluate(ModelTypes.Value.forType(boolean.class), env, 0,
+							ExceptionHandler.get1());
 					} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
 					}
 				} else {
-					active=InterpretedValueSynth.literalValue(TypeTokens.get().BOOLEAN, true, "true");
+					active = InterpretedValueSynth.literalValue(TypeTokens.get().BOOLEAN, true, "true");
 				}
 				isActive = active;
 
@@ -857,7 +863,7 @@ public class PlanSimulation {
 			InterpretedValueSynth<SettableValue<?>, SettableValue<Money>> amount = null;
 			try {
 				if (action.getAmount() != null) {
-					amount = action.getAmount().evaluate(MONEY_TYPE, env, 0);
+					amount = action.getAmount().evaluate(MONEY_TYPE, env, 0, ExceptionHandler.get1());
 				} else {
 					error(action, "No amount set", true);
 				}
