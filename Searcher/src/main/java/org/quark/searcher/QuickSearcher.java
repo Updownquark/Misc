@@ -715,6 +715,117 @@ public class QuickSearcher {
 		return new TextResult(fileResult, position, lineNumber, columnNumber, match.toString(), match.getGroups());
 	}
 
+	public static class TextNode {
+		public final String text;
+		public final boolean error;
+		public final boolean match;
+		public final List<TextNode> children;
+
+		public TextNode(String text, boolean error, boolean match, List<TextNode> children) {
+			this.text = text;
+			this.error = error;
+			this.match = match;
+			this.children = children;
+		}
+	}
+
+	public TextNode renderTextResult2(TextResult result) {
+		if (result == null) {
+			return null;
+		}
+		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
+			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
+			if (result.lineNumber > 3) {
+				seq.goToLine(reader, result.lineNumber - 3);
+				if (seq.getLine() < result.lineNumber - 3) {
+					return new TextNode("**Content changed!!**", true, false, null);
+				}
+			}
+			List<TextNode> children = new ArrayList<>();
+			TextNode root = new TextNode(null, false, false, children);
+			StringBuilder text = new StringBuilder("<html>");
+			if (seq.getPosition() > 0) {
+				text.append("...\n");
+			}
+			boolean appending = true;
+			boolean hasMore = false;
+			boolean started = false, ended = false;
+			boolean error = false, match = false;
+			while (appending) {
+				long charPos = seq.getPosition();
+				for (int i = 0; i < seq.length(); i++, charPos++) {
+					if (!started) {
+						if (charPos == result.position) {
+							started = true;
+							if (text.length() > 0) {
+								children.add(new TextNode(text.toString(), error, match, null));
+								text.setLength(0);
+							}
+							error = false;
+							match = true;
+						}
+					} else if (!ended) {
+						if (charPos == result.position + result.value.length()) {
+							ended = true;
+							if (text.length() > 0) {
+								children.add(new TextNode(text.toString(), error, match, null));
+								text.setLength(0);
+							}
+						} else if (seq.charAt(i) != result.value.charAt((int) (charPos - result.position))) {
+							if (text.length() > 0) {
+								children.add(new TextNode(text.toString(), error, match, null));
+								text.setLength(0);
+							}
+							children.add(new TextNode("**Content changed!!**", true, false, null));
+							return root;
+						}
+					} else if (seq.getLine() > result.lineNumber + 6) {
+						appending = false;
+						hasMore = i < seq.length() || reader.read() > 0;
+						break;
+					}
+					switch (seq.charAt(i)) {
+					case '\n':
+						text.append("<br>\n");
+						break;
+					case '\r':
+					case '\b':
+					case '\f':
+						break;
+					case '\t':
+						text.append("<&nbsp;&nbsp;&nbsp;&nbsp;");
+						break;
+					case '<':
+						text.append("&lt;");
+						break;
+					case '>':
+						text.append("&gt;");
+						break;
+					case '&':
+						text.append("&");
+						break;
+					default:
+						text.append(seq.charAt(i));
+						break;
+					}
+				}
+				if (appending) {
+					appending = seq.advance(reader, -1);
+				}
+			}
+
+			if (hasMore) {
+				text.append("...");
+			}
+			if (text.length() > 0) {
+				children.add(new TextNode(text.toString(), error, match, null));
+			}
+			return root;
+		} catch (IOException e) {
+			return new TextNode("*Could not re-read* " + result.value, true, false, null);
+		}
+	}
+
 	/**
 	 * @param result The text result to render
 	 * @return The HTML text to render for the user showing the text match in the context of its sub-section of the rest of the file

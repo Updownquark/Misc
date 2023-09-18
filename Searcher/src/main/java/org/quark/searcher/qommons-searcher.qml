@@ -333,7 +333,14 @@ blah -->
 						<column name="Line" value="value.getLineNumber()" />
 						<column name="Col" value="value.getColumnNumber()" />
 					</table>
-					<text-area rows="10" value="app.selectedText" html="true" editable="false" />
+					<text-area rows="10" editable="false">
+						<dynamic-styled-document root="app.searcher.renderTextResult2(app.selectedText)" children="node.children">
+							<text-style>
+								<style condition="node.error" attr="with-text.font-color">`red`</style>
+								<style condition="node.match" attr="with-text.font-weight">`bold`</style>
+							</text-style>
+						</dynamic-styled-document>
+					</text-area>
 				</box>
 			</split>
 		</split>
