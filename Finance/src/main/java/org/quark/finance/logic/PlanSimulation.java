@@ -16,7 +16,6 @@ import org.observe.Observable;
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.expresso.CompiledExpressoEnv;
-import org.observe.expresso.ExpressoEvaluationException;
 import org.observe.expresso.ExpressoInterpretationException;
 import org.observe.expresso.InterpretedExpressoEnv;
 import org.observe.expresso.ModelInstantiationException;
@@ -118,7 +117,7 @@ public class PlanSimulation {
 	}
 
 	public Interpreted interpret(InterpretedExpressoEnv env)
-		throws ExpressoInterpretationException, ExpressoEvaluationException, TypeConversionException {
+		throws ExpressoInterpretationException, TypeConversionException {
 		return new Interpreted(this, env);
 	}
 
@@ -128,7 +127,7 @@ public class PlanSimulation {
 		private final InterpretedExpressoEnv theEnv;
 
 		Interpreted(PlanSimulation def, InterpretedExpressoEnv env)
-			throws ExpressoInterpretationException, ExpressoEvaluationException, TypeConversionException {
+			throws ExpressoInterpretationException, TypeConversionException {
 			theDefinition = def;
 			env = env.forChild(def.getEnv());
 			env.getModels().interpret(env);
@@ -390,7 +389,7 @@ public class PlanSimulation {
 				}
 				try {
 					InterpretedValueSynth<SettableValue<?>, ?> interpreted = value.evaluate(ModelTypes.Value.any(), iEnv, 0,
-						ExceptionHandler.get1());
+						ExceptionHandler.thrower2());
 					Class<?> type = TypeTokens.get().wrap(TypeTokens.getRawType(interpreted.getType().getType(0)));
 					if (Number.class.isAssignableFrom(type)) {
 						EventQueue.invokeLater(() -> ((PlanVariable) vbl).setVariableType(PlanVariableType.Number));
@@ -404,7 +403,7 @@ public class PlanSimulation {
 						EventQueue.invokeLater(() -> ((PlanVariable) vbl).setVariableType(PlanVariableType.Other));
 					}
 					return interpreted;
-				} catch (ExpressoEvaluationException e) {
+				} catch (ExpressoInterpretationException e) {
 					error(vbl, e.getMessage(), false);
 					int pos = e.getErrorOffset();
 					throw new ExpressoInterpretationException(e.getMessage(),
@@ -419,8 +418,8 @@ public class PlanSimulation {
 			modelBuilder.withMaker(vbl.getName(), CompiledModelValue.of(vbl.getName(), ModelTypes.Value, iEnv -> {
 				InterpretedValueSynth<SettableValue<?>, SettableValue<Money>> interpretedInitBalance;
 				try {
-					interpretedInitBalance = value == null ? null : value.evaluate(MONEY_TYPE, iEnv, 0, ExceptionHandler.get1());
-				} catch (ExpressoEvaluationException e) {
+					interpretedInitBalance = value == null ? null : value.evaluate(MONEY_TYPE, iEnv, 0, ExceptionHandler.thrower2());
+				} catch (ExpressoInterpretationException e) {
 					error(vbl, e.getMessage(), false);
 					int pos = e.getErrorOffset();
 					throw new ExpressoInterpretationException(e.getMessage(),
@@ -585,8 +584,8 @@ public class PlanSimulation {
 				if (definition.getProcess().getStart() != null) {
 					try {
 						start = definition.getProcess().getStart().evaluate(ModelTypes.Value.forType(Instant.class), env, 0,
-							ExceptionHandler.get1());
-					} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
+							ExceptionHandler.thrower2());
+					} catch (ExpressoInterpretationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
 					}
@@ -596,8 +595,8 @@ public class PlanSimulation {
 				if (definition.getProcess().getEnd() != null) {
 					try {
 						end = definition.getProcess().getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env, 0,
-							ExceptionHandler.get1());
-					} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
+							ExceptionHandler.thrower2());
+					} catch (ExpressoInterpretationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
 					}
@@ -607,8 +606,8 @@ public class PlanSimulation {
 				if (definition.getProcess().getActive() != null) {
 					try {
 						active = definition.getProcess().getActive().evaluate(ModelTypes.Value.forType(boolean.class), env, 0,
-							ExceptionHandler.get1());
-					} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
+							ExceptionHandler.thrower2());
+					} catch (ExpressoInterpretationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
 					}
@@ -863,11 +862,11 @@ public class PlanSimulation {
 			InterpretedValueSynth<SettableValue<?>, SettableValue<Money>> amount = null;
 			try {
 				if (action.getAmount() != null) {
-					amount = action.getAmount().evaluate(MONEY_TYPE, env, 0, ExceptionHandler.get1());
+					amount = action.getAmount().evaluate(MONEY_TYPE, env, 0, ExceptionHandler.thrower2());
 				} else {
 					error(action, "No amount set", true);
 				}
-			} catch (ExpressoInterpretationException | ExpressoEvaluationException | TypeConversionException e) {
+			} catch (ExpressoInterpretationException | TypeConversionException e) {
 				error(theAction, e.getMessage(), true);
 				e.printStackTrace();
 			}

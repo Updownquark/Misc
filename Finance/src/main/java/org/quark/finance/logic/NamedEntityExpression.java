@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.observe.expresso.CompiledExpressoEnv;
-import org.observe.expresso.ExpressoEvaluationException;
 import org.observe.expresso.ExpressoInterpretationException;
 import org.observe.expresso.InterpretedExpressoEnv;
 import org.observe.expresso.ModelException;
@@ -69,29 +68,34 @@ public class NamedEntityExpression<E extends PlanComponent> implements Observabl
 	}
 
 	@Override
-	public <M, MV extends M, TX extends Throwable> EvaluatedExpression<M, MV> evaluate(ModelInstanceType<M, MV> type,
-		InterpretedExpressoEnv env, int expressionOffset, ExceptionHandler.Single<TypeConversionException, TX> exHandler)
-		throws ExpressoEvaluationException, ExpressoInterpretationException, TX {
+	public <M, MV extends M, EX extends Throwable, TX extends Throwable> EvaluatedExpression<M, MV> evaluate(ModelInstanceType<M, MV> type,
+		InterpretedExpressoEnv env, int expressionOffset,
+		ExceptionHandler.Double<ExpressoInterpretationException, TypeConversionException, EX, TX> exHandler)
+		throws ExpressoInterpretationException, EX, TX {
 		try {
 			return ObservableExpression.evEx(expressionOffset, getExpressionLength(), //
 				env.getModels().getValue(theEntity.getName(), type, env), this);
 		} catch (ModelException e) {
-			throw new ExpressoEvaluationException(0, getExpressionLength(), "No such model value: " + theEntity.getName(), e);
+			exHandler.handle1(new ExpressoInterpretationException("No such model value: " + theEntity.getName(),
+				env.reporting().getPosition(), getExpressionLength(), e));
+			return null;
 		} catch (TypeConversionException e) {
-			exHandler.handle1(e);
+			exHandler.handle2(e);
 			return null;
 		}
 	}
 
 	@Override
-	public <M, MV extends M, TX extends Throwable> EvaluatedExpression<M, MV> evaluateInternal(ModelInstanceType<M, MV> type,
-		InterpretedExpressoEnv env, int expressionOffset, ExceptionHandler.Single<TypeConversionException, TX> exHandler)
-		throws ExpressoEvaluationException, ExpressoInterpretationException, TX {
+	public <M, MV extends M, EX extends Throwable> EvaluatedExpression<M, MV> evaluateInternal(ModelInstanceType<M, MV> type,
+		InterpretedExpressoEnv env, int expressionOffset, ExceptionHandler.Single<ExpressoInterpretationException, EX> exHandler)
+		throws ExpressoInterpretationException, EX {
 		try {
 			return ObservableExpression.evEx(expressionOffset, getExpressionLength(), //
 				(InterpretedValueSynth<M, MV>) env.getModels().getComponent(theEntity.getName()).interpret(env), this);
 		} catch (ModelException e) {
-			throw new ExpressoEvaluationException(0, getExpressionLength(), "No such model value: " + theEntity.getName(), e);
+			exHandler.handle1(new ExpressoInterpretationException("No such model value: " + theEntity.getName(),
+				env.reporting().getPosition(), getExpressionLength(), e));
+			return null;
 		}
 	}
 
