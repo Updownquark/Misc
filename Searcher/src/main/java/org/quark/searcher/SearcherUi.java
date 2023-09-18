@@ -173,6 +173,7 @@ public class SearcherUi extends JPanel {
 	private final SettableValue<String> theContentTest;
 	private final SettableValue<Boolean> isSearchingMultipleContentMatches;
 	private final SettableValue<Integer> theZipLevel;
+	private final SettableValue<FileAttributeRequirement> theDirectoryRequirement;
 	private final ObservableMap<FileBooleanAttribute, FileAttributeRequirement> theBooleanAttributes;
 	private final SyncValueSet<PatternConfig> theExclusionPatterns;
 	private volatile List<Pattern> theDynamicExclusionPatterns;
@@ -244,6 +245,7 @@ public class SearcherUi extends JPanel {
 				.withFormat(Format.BOOLEAN, () -> false).buildValue(null).disableWith(disable);
 		theZipLevel = config.asValue(int.class).at("zip-level").withFormat(Format.INT, () -> 10).buildValue(null);
 		theZipLevel.changes().act(evt -> theFileSource.setMaxArchiveDepth(evt.getNewValue()));
+		theDirectoryRequirement=config.asValue(FileAttributeRequirement.class).at("directory").buildValue(null);
 		SyncValueSet<FileAttributeMapEntry> attrCollection = config.asValue(FileAttributeMapEntry.class).at("file-attributes")
 				.asEntity(null).buildEntitySet(null);
 		theBooleanAttributes = attrCollection.getValues().flow()
@@ -465,7 +467,7 @@ public class SearcherUi extends JPanel {
 		boolean succeeded = false;
 		int[] searched = new int[2];
 		try {
-			doSearch(file, filePattern, contentPattern, isSearchingMultipleContentMatches.get(), //
+			doSearch(file, filePattern, contentPattern, isSearchingMultipleContentMatches.get(), theDirectoryRequirement, //
 					new HashMap<>(theBooleanAttributes), () -> rootResult, new StringBuilder(),
 					new FileContentSeq(theMaxFileMatchLength.get()), false, searched);
 			succeeded = true;
@@ -493,8 +495,8 @@ public class SearcherUi extends JPanel {
 	}
 
 	void doSearch(BetterFile file, Pattern filePattern, Pattern contentPattern, boolean searchMultiContent, //
-			Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts, Supplier<SearchResultNode> nodeGetter,
-			StringBuilder pathSeq, FileContentSeq contentSeq, boolean hasMatch, int[] searched) {
+		SettableValue<FileAttributeRequirement> directory, Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts,
+		Supplier<SearchResultNode> nodeGetter, StringBuilder pathSeq, FileContentSeq contentSeq, boolean hasMatch, int[] searched) {
 		if (isCanceling) {
 			return;
 		}
@@ -525,10 +527,15 @@ public class SearcherUi extends JPanel {
 		boolean dir = file.isDirectory();
 		if (filePattern == null || fileMatcher != null) {
 			boolean matches = true;
-			for (FileBooleanAttribute attr : FileBooleanAttribute.values()) {
-				if (!theBooleanAttributes.get(attr).matches(file.get(attr))) {
-					matches = false;
-					break;
+			if (!directory.get().matches(file.isDirectory())) {
+				matches = false;
+			}
+			if (matches) {
+				for (FileBooleanAttribute attr : FileBooleanAttribute.values()) {
+					if (!theBooleanAttributes.get(attr).matches(file.get(attr))) {
+						matches = false;
+						break;
+					}
 				}
 			}
 			if (matches && !file.isDirectory()) {
@@ -574,7 +581,7 @@ public class SearcherUi extends JPanel {
 				if (isCanceling) {
 					return;
 				}
-				doSearch(child, filePattern, contentPattern, searchMultiContent, booleanAtts, () -> {
+				doSearch(child, filePattern, contentPattern, searchMultiContent, directory, booleanAtts, () -> {
 					if (node[0] == null) {
 						node[0] = nodeGetter.get();
 					}
@@ -782,8 +789,7 @@ public class SearcherUi extends JPanel {
 				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
 						p -> p.addLabel(null, ObservableValue.of("----File Metadata----"), Format.TEXT, x -> x.fill()))//
 				.addTextField("Max Zip Depth:", theZipLevel, SpinnerFormat.INT, tf -> tf.fill())//
-				.addRadioField("Directory:", theBooleanAttributes.observe(FileBooleanAttribute.Directory),
-						FileAttributeRequirement.values(), null)//
+				.addRadioField("Directory:", theDirectoryRequirement, FileAttributeRequirement.values(), null)//
 				.addRadioField("Readable:", theBooleanAttributes.observe(FileBooleanAttribute.Readable),
 						FileAttributeRequirement.values(), null)//
 				.addRadioField("Writable:", theBooleanAttributes.observe(FileBooleanAttribute.Writable),

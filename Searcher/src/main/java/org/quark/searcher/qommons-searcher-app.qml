@@ -1,25 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<qonfig-app uses:app="Qonfig-App v0.1" app-file="qommons-searcher.qml">
-	<toolkit def="/org/observe/expresso/expresso-core.qtd">
-		<value-type>org.observe.expresso.ExpressionValueType</value-type>
+<quick-app xmlns:app="Quick-App v0.1" app-file="qommons-searcher.qml">
+	<toolkit def="/org/observe/expresso/qonfig/expresso-core.qtd">
+		<value-type>org.observe.expresso.qonfig.ExpressionValueType</value-type>
 	</toolkit>
-	<toolkit def="/org/observe/expresso/expresso-base.qtd" />
-	<toolkit def="/org/observe/expresso/expresso-config.qtd" />
-	<toolkit def="/org/observe/expresso/expresso-debug.qtd" />
+	<toolkit def="/org/observe/expresso/qonfig/expresso-base.qtd" />
+	<toolkit def="/org/observe/expresso/qonfig/expresso-config.qtd" />
+	<toolkit def="/org/observe/expresso/qonfig/expresso-debug.qtd" />
 	<toolkit def="/org/observe/quick/style/quick-style.qtd" />
 	<toolkit def="/org/observe/quick/quick-core.qtd" />
-	<toolkit def="/org/observe/quick/quick-base.qtd" />
-	<toolkit def="/org/observe/quick/quick-ext.qtd" />
-	<toolkit def="/org/observe/quick/quick-swing.qtd" />
-	<special-session>org.observe.expresso.ExpressoSessionImplV0_1</special-session>
-	<special-session>org.observe.quick.style.StyleSessionImplV0_1</special-session>
-	<interpretation>org.observe.expresso.ExpressoBaseV0_1</interpretation>
-	<interpretation>org.observe.expresso.ExpressoDebugV0_1</interpretation>
-	<interpretation>org.observe.expresso.ExpressoConfigV0_1</interpretation>
-	<interpretation>org.observe.quick.style.QuickStyle</interpretation>
-	<interpretation>org.observe.quick.QuickCore</interpretation>
-	<interpretation>org.observe.quick.QuickBase</interpretation>
-	<interpretation>org.observe.quick.QuickX</interpretation>
-	<interpretation>org.observe.quick.QuickSwing</interpretation>
-</qonfig-app>
+	<toolkit def="/org/observe/quick/base/quick-base.qtd" />
+	<toolkit def="/org/observe/quick/base/quick-ext.qtd" />
+	<toolkit def="/org/observe/quick/swing/quick-swing.qtd" />
+	<special-session>org.observe.expresso.qonfig.ExpressoSessionImplV0_1</special-session>
+	<interpretation>org.observe.expresso.qonfig.ExpressoBaseV0_1</interpretation>
+	<interpretation>org.observe.expresso.qonfig.ExpressoDebugV0_1</interpretation>
+	<interpretation>org.observe.expresso.qonfig.ExpressoConfigV0_1</interpretation>
+	<interpretation>org.observe.quick.style.QuickStyleInterpretation</interpretation>
+	<interpretation>org.observe.quick.QuickCoreInterpretation</interpretation>
+	<interpretation>org.observe.quick.base.QuickBaseInterpretation</interpretation>
+	<interpretation>org.observe.quick.base.QuickXInterpretation</interpretation>
+	<interpretation>org.observe.quick.swing.QuickSwingInterpretation</interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickCoreSwing</quick-interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickBaseSwing</quick-interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickXSwing</quick-interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickSwing</quick-interpretation>
+</quick-app>
