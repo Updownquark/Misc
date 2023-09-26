@@ -19,9 +19,9 @@ blah -->
 		<models>
 			<model name="formats">
 				<archive-enabled-file-source name="files" max-archive-depth="config.zipLevel">
-					<archive-method type="zip" />
-					<archive-method type="tar" />
-					<archive-method type="gz" />
+					<zip-archival />
+					<tar-archival />
+					<gz-archival />
 				</archive-enabled-file-source>
 				<constant name="workingDir">System.getProperty("user.dir")</constant>
 				<file-format name="fileFormat" working-dir="workingDir">
@@ -29,7 +29,7 @@ blah -->
 				</file-format>
 				<regex-format-string name="patternFormat" />
 				<double-format name="byteFormat" sig-digs="4" unit="b" metric-prefixes-p2="true" />
-				<instant-format name="timeFormat" max-resolution="Minute" relative-eval-type="Past" />
+				<instant-format name="timeFormat" max-resolution="Minute" relative-evaluation="Past" />
 				<text-config-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" default="Maybe" />
 			</model>
 			<config name="config" config-name="qommons-search">
