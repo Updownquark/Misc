@@ -21,8 +21,7 @@
 	<interpretation>org.observe.quick.base.QuickBaseInterpretation</interpretation>
 	<interpretation>org.observe.quick.base.QuickXInterpretation</interpretation>
 	<interpretation>org.observe.quick.swing.QuickSwingInterpretation</interpretation>
-	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickCoreSwing</quick-interpretation>
-	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickBaseSwing</quick-interpretation>
-	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickXSwing</quick-interpretation>
-	<quick-interpretation>org.observe.quick.swing.QuickSwingPopulator$QuickSwing</quick-interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickCoreSwing</quick-interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickBaseSwing</quick-interpretation>
+	<quick-interpretation>org.observe.quick.swing.QuickXSwing</quick-interpretation>
 </quick-app>

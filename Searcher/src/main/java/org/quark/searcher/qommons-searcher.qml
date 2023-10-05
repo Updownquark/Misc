@@ -1,17 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- This is a header comment
-blah -->
-
 <quick xmlns:base="Quick-Base v0.1" xmlns:swing="Quick-Swing v0.1" xmlns:x="Quick-X v0.1" xmlns:expresso="Expresso-Config v0.1"
 	xmlns:exDebug="Expresso-Debug v0.1"
 	with-extension="swing:quick-swing,window"
 	look-and-feel="system" title="`Qommons Searcher`"
 	x="config.x" y="config.y" width="config.width" height="config.height" close-action="exit">
 	<head>
-		<?CONTENTLESS-INTRUCTION?>
-		<?INSTRUCTION ?>
-		<?INSTRUCTION CONTENT?>
 		<imports>
 			<import>org.quark.searcher.*</import>
 			<import>org.qommons.io.BetterFile</import>
@@ -24,13 +18,13 @@ blah -->
 					<gz-archival />
 				</archive-enabled-file-source>
 				<constant name="workingDir">System.getProperty("user.dir")</constant>
-				<file-format name="fileFormat" working-dir="workingDir">
+				<file-format name="fileFormat" working-dir="BetterFile.at(files, workingDir)">
 					<file-source-from-model ref="files" />
 				</file-format>
 				<regex-format-string name="patternFormat" />
 				<double-format name="byteFormat" sig-digs="4" unit="b" metric-prefixes-p2="true" />
 				<instant-format name="timeFormat" max-resolution="Minute" relative-evaluation="Past" />
-				<text-config-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" default="Maybe" />
+				<text-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" />
 			</model>
 			<config name="config" config-name="qommons-search">
 				<value name="zipLevel" type="int" default="10" config-path="zip-level" />
@@ -61,7 +55,7 @@ blah -->
 				<value name="maxFileMatchLength" type="int" default="10000" />
 				<value-set name="excludedFileNames" type="PatternConfig" />
 				<map name="fileRequirements" key-type="BetterFile.FileBooleanAttribute" type="FileAttributeRequirement">
-					<text-config-format>
+					<text-config-format default="Maybe">
 						<format-from-model ref="formats.fileReqFormat" />
 					</text-config-format>
 				</map>
@@ -164,7 +158,7 @@ blah -->
 		</style-sheet>
 	</head>
 	<box layout="inline-layout" orientation="vertical" main-align="justify" cross-align="justify">
-		<split orientation="horizontal" split-position="config.mainSplitDiv %">
+		<split orientation="horizontal" split-position="config.mainSplitDiv *`1%`">
 			<field-panel>
 				<box layout="inline-layout" orientation="horizontal" main-align="justify" field-label="`Search In:`" fill="true">
 					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.searchUIEnabled" columns="50"
@@ -215,12 +209,8 @@ blah -->
 				</box>
 				<box field-label="`Text Pattern:`" layout="inline-layout" orientation="horizontal" main-align="justify" fill="true">
 					<model>
-						<first-value name="textPatternModEnabled">
-							<value>app.configurable</value>
-							<value><![CDATA[
-								config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? "No Text Pattern set" : null
-							]]></value>
-						</first-value>
+						<value name="textPatternEmptyMsg">config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? "No Text Pattern set" : null</value>
+						<value name="textPatternModEnabled">app.configurable || textPatternEmptyMessage</value>
 					</model>
 					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Text to search for in matching files`">
@@ -314,7 +304,7 @@ blah -->
 					<button action="app.searchAction">app.searchText</button>
 				</box>
 			</field-panel>
-			<split orientation="vertical" split-position="config.rightSplitDiv %">
+			<split orientation="vertical" split-position="config.rightSplitDiv * `1%`">
 				<tree active-value-name="result" selection="app.selectedResult">
 					<dynamic-tree-model value="app.resultRoot" children="result.getChildren()" leaf="!result.getFile().isDirectory()" />
 					<column name="Tree">
@@ -347,7 +337,4 @@ blah -->
 		<label value="app.statusMessage" />
 	</box>
 </quick>
-
-<!-- This is a footer comment
-blah -->
 
