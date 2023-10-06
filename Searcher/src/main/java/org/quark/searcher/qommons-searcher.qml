@@ -18,13 +18,16 @@
 					<gz-archival />
 				</archive-enabled-file-source>
 				<constant name="workingDir">System.getProperty("user.dir")</constant>
-				<file-format name="fileFormat" working-dir="BetterFile.at(files, workingDir)">
-					<file-source-from-model ref="files" />
-				</file-format>
+				<file-format name="fileFormat" working-dir="BetterFile.at(files, workingDir)" file-source="files" />
 				<regex-format-string name="patternFormat" />
 				<double-format name="byteFormat" sig-digs="4" unit="b" metric-prefixes-p2="true" />
 				<instant-format name="timeFormat" max-resolution="Minute" relative-evaluation="Past" />
-				<text-format name="fileReqFormat" type="org.quark.searcher.FileAttributeRequirement" />
+				<standard-text-format name="fileReqFormat" type="FileAttributeRequirement" />
+
+				<!-- config formats -->
+				<text-config-format name="fileConfigFormat" text-format="fileFormat" default="files.at(`.`)"/>
+				<text-config-format name="patternConfigFormat" text-format="patternFormat" />
+				<text-config-format name="fileReqConfigFormat" text-format="fileReqFormat" default="Maybe" />
 			</model>
 			<config name="config" config-name="qommons-search">
 				<value name="zipLevel" type="int" default="10" config-path="zip-level" />
@@ -32,33 +35,19 @@
 				<value name="y" type="int" />
 				<value name="width" type="int" />
 				<value name="height" type="int" />
-				<value name="searchBase" type="BetterFile" default="formats.files.at(`.`)">
-					<text-config-format>
-						<format-from-model ref="formats.fileFormat" />
-					</text-config-format>
-				</value>
-				<value name="fileNamePattern" type="String">
-					<text-config-format>
-						<format-from-model ref="formats.patternFormat" />
-					</text-config-format>
-				</value>
+				<value name="searchBase" type="BetterFile" format="formats.fileConfigFormat" />
+				<value name="fileNamePattern" type="String" format="formats.patternConfigFormat" />
 				<value name="fileNameRegex" type="boolean" default="true" />
 				<value name="fileNameCaseSensitive" type="boolean" default="false" />
-				<value name="fileTextPattern" type="String">
-					<text-config-format>
-						<format-from-model ref="formats.patternFormat" />
-					</text-config-format>
-				</value>
+				<value name="fileTextPattern" type="String" format="formats.patternConfigFormat" />
 				<value name="fileTextRegex" type="boolean" default="true" />
 				<value name="fileTextCaseSensitive" type="boolean" default="false" />
 				<value name="multiContentMatches" type="boolean" default="true" />
 				<value name="maxFileMatchLength" type="int" default="10000" />
 				<value-set name="excludedFileNames" type="PatternConfig" />
-				<map name="fileRequirements" key-type="BetterFile.FileBooleanAttribute" type="FileAttributeRequirement">
-					<text-config-format default="Maybe">
-						<format-from-model ref="formats.fileReqFormat" />
-					</text-config-format>
-				</map>
+				<value  name="directoryRequirement" type="FileAttributeRequirement" format="formats.fileReqConfigFormat" />
+				<map name="fileRequirements" key-type="BetterFile.FileBooleanAttribute" type="FileAttributeRequirement"
+					format="formats.fileReqConfigFormat" />
 				<value name="minSize" type="double" default="0" />
 				<value name="maxSize" type="double" default="QuickSearcher.DEFAULT_MAX_SIZE" />
 				<value name="minLM" type="java.time.Instant" default="`Jan 01 1900 12:00am`" />
@@ -76,6 +65,14 @@
 					since QuickSearcher provides these as observables so the app can be notified of changes.
 					Without the type specified, these variables would be of type ObservableValue<Whatever> instead of type Whatever.
 				-->
+				<transform name="searchBase" source="config.searchBase">
+					<map-to source-as="betterFile">
+						<map-with>betterFile==null ? null : org.qommons.io.FileUtils.asFile(betterFile)</map-with>
+						<map-reverse target-as="javaFile" type="replace-source" inexact="true">
+							javaFile==null ? null : formats.files.at(javaFile.getAbsolutePath())
+						</map-reverse>
+					</map-to>
+				</transform>
 				<value name="status" type="QuickSearcher.SearchStatus">searcher.getStatus()</value>
 				<value name="statusMessage" type="String">searcher.getStatusMessage()</value>
 				<value name="resultRoot" type="QuickSearcher.SearchResultNode">searcher.getResultRoot()</value>
@@ -163,7 +160,7 @@
 				<box layout="inline-layout" orientation="horizontal" main-align="justify" field-label="`Search In:`" fill="true">
 					<text-field value="config.searchBase" format="formats.fileFormat" disable-with="app.searchUIEnabled" columns="50"
 						tooltip="`Root folder or file to search in`" />
-					<file-button open="true" value="config.searchBase" disable-with="app.configurable"
+					<file-button open="true" value="app.searchBase" disable-with="app.configurable"
 						tooltip="`Root folder or file to search in`" />
 				</box>
 				<spacer length="3" />
@@ -189,15 +186,22 @@
 							<refresh on="config.fileNameRegex" />
 							<refresh on="config.fileNameCaseSensitive" />
 						</transform>
-						<file-format name="fileNamePatternFormat" working-dir="formats.workingDir" allow-empty="true">
-							<file-source-from-model ref="formats.files" />
+						<transform name="testFile" source="testFilePath">
+							<map-to source-as="betterFile">
+								<map-with>betterFile==null ? null : org.qommons.io.FileUtils.asFile(betterFile)</map-with>
+								<map-reverse target-as="javaFile" type="replace-source" inexact="true">
+									javaFile==null ? null : formats.files.at(javaFile.getAbsolutePath())
+								</map-reverse>
+							</map-to>
+						</transform>
+						<file-format name="fileNamePatternFormat" working-dir="formats.files.at(formats.workingDir)" allow-empty="true" file-source="formats.files">
 							<filter-validation test="app.searcher.filePatternMatches(filterValue, config.fileNamePattern,
 							config.fileNameRegex, config.fileNameCaseSensitive)" />
 						</file-format>
 					</model>
 					<text-field value="testFilePath" format="fileNamePatternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Enter a file name to test the file pattern against it`" />
-					<file-button open="true" value="testFilePath" disable-with="app.searchUIEnabled"
+					<file-button open="true" value="testFile" disable-with="app.searchUIEnabled"
 						tooltip="`Enter a file name to test the file pattern against it`" />
 				</box>
 				<spacer length="3" />
@@ -210,7 +214,7 @@
 				<box field-label="`Text Pattern:`" layout="inline-layout" orientation="horizontal" main-align="justify" fill="true">
 					<model>
 						<value name="textPatternEmptyMsg">config.fileTextPattern==null || config.fileTextPattern.isEmpty() ? "No Text Pattern set" : null</value>
-						<value name="textPatternModEnabled">app.configurable || textPatternEmptyMessage</value>
+						<value name="textPatternModEnabled">app.configurable || textPatternEmptyMsg</value>
 					</model>
 					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Text to search for in matching files`">
@@ -229,10 +233,10 @@
 							<refresh on="config.fileTextRegex" />
 							<refresh on="config.fileTextCaseSensitive" />
 						</transform>
-						<text-format name="fileContentPatternFormat" type="text">
+						<standard-text-format name="fileContentPatternFormat" type="String">
 							<filter-validation test="app.searcher.contentPatternMatches(filterValue, config.fileTextPattern,
 							config.fileTextRegex, config.fileTextCaseSensitive) ? null : &quot;Content does not match pattern&quot;" />
-						</text-format>
+						</standard-text-format>
 					</model>
 					<text-field region="center" value="testFileContent" format="fileContentPatternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Enter text to test the text pattern against it`" />
@@ -247,7 +251,7 @@
 					<field-panel role="content">
 						<text-field field-label="`Max Archive Depth:`" value="config.zipLevel" disable-with="app.searchUIEnabled" columns="8"
 							tooltip="`Maximum number of archives to descend into recursively`" />
-						<radio-buttons field-label="`Directory:`" value="config.fileRequirements.observe(Directory)"
+						<radio-buttons field-label="`Directory:`" value="config.directoryRequirement"
 							values="FileAttributeRequirement.values()" disable-with="app.searchUIEnabled"
 							tooltip="`Whether matching files may/must/cannot be directories`" />
 						<radio-buttons field-label="`Readable:`" value="config.fileRequirements.observe(Readable)"
@@ -274,21 +278,21 @@
 					</field-panel>
 				</collapse-pane>
 				<spacer length="3" />
-				<table rows="config.excludedFileNames" fill="true">
+				<table rows="config.excludedFileNames" fill="true" active-value-name="fileName">
 					<titled-border title="`Exclude Files`">
 						<style attr="border-color" condition="config.multiContentMatches">`blue`</style>
 						<style attr="font-weight" condition="config.fileNameCaseSensitive">`bold`</style>
 						<style attr="font-slant" condition="config.fileTextCaseSensitive">`italic`</style>
 						<style attr="border-color" condition="hovered">`green`</style>
 					</titled-border>
-					<column name="Pattern" value="value.getPattern()">
-						<column-edit type="modify-row-value" commit="value.setPattern(columnEditValue)">
+					<column name="`Pattern`" value="fileName.getPattern()">
+						<column-edit type="modify-row-value" column-edit-value-name="pattern" commit="fileName.setPattern(pattern)">
 							<text-field format="formats.patternFormat" />
 						</column-edit>
 					</column>
-					<column name="Case" value="value.isCaseSensitive()">
+					<column name="`Case`" value="fileName.isCaseSensitive()">
 						<check-box value="columnValue" />
-						<column-edit type="modify-row-value" commit="value.setCaseSensitive(columnEditValue)">
+						<column-edit type="modify-row-value" column-edit-value-name="caseS" commit="fileName.setCaseSensitive(caseS)">
 							<check-box />
 						</column-edit>
 					</column>
@@ -305,9 +309,9 @@
 				</box>
 			</field-panel>
 			<split orientation="vertical" split-position="config.rightSplitDiv * `1%`">
-				<tree active-value-name="result" selection="app.selectedResult">
+				<tree active-node-name="result" node-selection="app.selectedResult">
 					<dynamic-tree-model value="app.resultRoot" children="result.getChildren()" leaf="!result.getFile().isDirectory()" />
-					<column name="Tree">
+					<column name="`Tree`">
 						<!-- These icons are from https://icons8.com,
 							  specifically icon/11651/file and icon/21079/folder" -->
 						<label value="result.getFile().getName()"
@@ -317,14 +321,14 @@
 				<box layout="inline-layout" orientation="vertical" main-align="justify" cross-align="justify" visible="app.isTextFiltered">
 					<label value="&quot;Text Matches In &quot;+app.selectedResult.getFile().getPath()"
 						visible="app.selectedResult!=null"/>
-					<table rows="app.textMatches" selection="app.selectedTextMatch">
-						<column name="Value" value="value.getValue()" />
-						<column name="Pos" value="value.getPosition()" />
-						<column name="Line" value="value.getLineNumber()" />
-						<column name="Col" value="value.getColumnNumber()" />
+					<table rows="app.textMatches" selection="app.selectedTextMatch" active-value-name="match">
+						<column name="`Value`" value="match.getValue()" />
+						<column name="`Pos`" value="match.getPosition()" />
+						<column name="`Line`" value="match.getLineNumber()" />
+						<column name="`Col`" value="match.getColumnNumber()" />
 					</table>
 					<text-area rows="10" editable="false">
-						<dynamic-styled-document root="app.searcher.renderTextResult2(app.selectedText)" children="node.children">
+						<dynamic-styled-document root="app.searcher.renderTextResult2(app.selectedTextMatch)" children="node.children">
 							<text-style>
 								<style condition="node.error" attr="with-text.font-color">`red`</style>
 								<style condition="node.match" attr="with-text.font-weight">`bold`</style>
