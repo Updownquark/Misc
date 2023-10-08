@@ -168,7 +168,7 @@ public class Finance extends JPanel {
 		ExpressionFormat expFormat = new ExpressionFormat(new JavaExpressoParser(), this, null, null, true);
 		formatSet.withFormat(TypeTokens.get().of(ObservableExpression.class), new ObservableConfigFormat<ObservableExpression>() {
 			@Override
-			public void format(ObservableConfigParseSession session, ObservableExpression value, ObservableExpression previousValue,
+			public boolean format(ObservableConfigParseSession session, ObservableExpression value, ObservableExpression previousValue,
 				ConfigGetter config2, Consumer<ObservableExpression> acceptedValue, Observable<?> until) throws IllegalArgumentException {
 				if (value != null) {
 					ObservableConfig cfg = config2.getConfig(true, false);
@@ -181,6 +181,7 @@ public class Finance extends JPanel {
 				try (Transaction t = NamedEntityExpression.persist()) {
 					config2.getConfig(true, false).setValue(value == null ? null : value.toString());
 				}
+				return true;
 			}
 
 			@Override
