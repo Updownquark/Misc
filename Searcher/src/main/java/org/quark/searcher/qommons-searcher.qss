@@ -2,18 +2,18 @@
 
 <style-sheet xmlns:base="Quick-Base v0.1">
 	<style element="multi-value-renderable">
-		<style condition="selected">
+		<style if="selected">
 			<style attr="color">`lime-green`</style>
 		</style>
-		<style condition="hovered">
+		<style if="hovered">
 			<style attr="font-color">`green`</style>
 		</style>
 	</style>
-	<style element="field-panel" condition="pressed">
+	<style element="field-panel" if="pressed">
 		<style child="content" element="box">
 			<style child="content" element="text-field">
 				<style attr="color">`light-blue`</style>
-				<style condition="error!=null" attr="color">`light-green`</style>
+				<style if="error!=null" attr="color">`light-green`</style>
 			</style>
 		</style>
 	</style>

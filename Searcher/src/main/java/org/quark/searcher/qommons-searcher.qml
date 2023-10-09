@@ -149,7 +149,7 @@
 			<import-style-sheet name="searcher" ref="qommons-searcher.qss" />
 			<style element="table">
 				<style child="border">
-					<style attr="thickness" condition="config.fileNameCaseSensitive">2</style>
+					<style attr="thickness" if="config.fileNameCaseSensitive">2</style>
 				</style>
 			</style>
 		</style-sheet>
@@ -207,7 +207,7 @@
 				<spacer length="3" />
 				<box layout="inline-layout" orientation="horizontal" main-align="center" fill="true">
 					<label>
-						<style attr="font-color" condition="rightPressed">`red`</style>
+						<style attr="font-color" if="rightPressed">`red`</style>
 						----File Content----
 					</label>
 				</box>
@@ -218,7 +218,7 @@
 					</model>
 					<text-field value="config.fileTextPattern" format="formats.patternFormat" disable-with="app.searchUIEnabled"
 						commit-on-type="true" tooltip="`Text to search for in matching files`">
-						<style attr="color" condition="hovered">`green`</style>
+						<style attr="color" if="hovered">`green`</style>
 					</text-field>
 					<check-box value="config.fileTextRegex" disable-with="app.searchUIEnabled || textPatternModEnabled"
 						tooltip="`Whether the file content pattern is evaluated as a regular expression`">`Regex:`</check-box>
@@ -280,10 +280,10 @@
 				<spacer length="3" />
 				<table rows="config.excludedFileNames" fill="true" active-value-name="fileName">
 					<titled-border title="`Exclude Files`">
-						<style attr="border-color" condition="config.multiContentMatches">`blue`</style>
-						<style attr="font-weight" condition="config.fileNameCaseSensitive">`bold`</style>
-						<style attr="font-slant" condition="config.fileTextCaseSensitive">`italic`</style>
-						<style attr="border-color" condition="hovered">`green`</style>
+						<style attr="border-color" if="config.multiContentMatches">`blue`</style>
+						<style attr="font-weight" if="config.fileNameCaseSensitive">`bold`</style>
+						<style attr="font-slant" if="config.fileTextCaseSensitive">`italic`</style>
+						<style attr="border-color" if="hovered">`green`</style>
 					</titled-border>
 					<column name="`Pattern`" value="fileName.getPattern()">
 						<column-edit type="modify-row-value" column-edit-value-name="pattern" commit="fileName.setPattern(pattern)">
@@ -330,8 +330,8 @@
 					<text-area rows="10" editable="false">
 						<dynamic-styled-document root="app.searcher.renderTextResult2(app.selectedTextMatch)" children="node.children">
 							<text-style>
-								<style condition="node.error" attr="with-text.font-color">`red`</style>
-								<style condition="node.match" attr="with-text.font-weight">`bold`</style>
+								<style if="node.error" attr="with-text.font-color">`red`</style>
+								<style if="node.match" attr="with-text.font-weight">`bold`</style>
 							</text-style>
 						</dynamic-styled-document>
 					</text-area>
