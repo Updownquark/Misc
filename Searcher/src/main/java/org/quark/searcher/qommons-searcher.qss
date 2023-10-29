@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <style-sheet xmlns:base="Quick-Base v0.1">
+	<import-style-sheet name="base" ref="classpath://org/observe/quick/base/quick-base.qss" />
 	<style element="multi-value-renderable">
 		<style if="selected">
 			<style attr="color">`lime-green`</style>
-		</style>
-		<style if="hovered">
-			<style attr="font-color">`green`</style>
 		</style>
 	</style>
 	<style element="field-panel" if="pressed">

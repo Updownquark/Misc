@@ -81,7 +81,7 @@
 				<value name="searchText" type="String">searcher.getSearchText()</value>
 				<value name="searchEnabled" type="String">searcher.isSearchEnabled()</value>
 				<value name="selectedTextMatch" type="QuickSearcher.TextResult" />
-				<value name="selectedText" type="String">QuickSearcher.renderTextResult(selectedTextMatch)</value>
+				<hook name="renderTextHook" on="selectedTextMatch">searcher.renderTextResult(selectedTextMatch)</hook>
 				<!--<transform name="status" source="searcher" break-on="createValue">
 					<map-to type="QuickSearcher.SearchStatus" source-as="srch">
 						<map-with>srch.getStatus()</map-with>
@@ -127,7 +127,7 @@
 				<transform name="searchAction" source="_searchAction">
 					<disable with="searchActionEnabled" />
 				</transform>
-				<value name="textMatches">selectedResult.getTextResults()</value>
+				<value name="textMatches">selectedResult==null ? null : selectedResult.getTextResults()</value>
 				<!--<transform name="textMatches" source="selectedResult">
 					<map-to source-as="res" null-to-null="true">
 						<map-with>res.getTextResults()</map-with>
@@ -310,7 +310,7 @@
 			</field-panel>
 			<split orientation="vertical" split-position="config.rightSplitDiv * `1%`">
 				<tree active-node-name="result" node-selection="app.selectedResult">
-					<dynamic-tree-model value="app.resultRoot" children="result.getChildren()" leaf="!result.getFile().isDirectory()" />
+					<dynamic-tree-model value="app.resultRoot" children="result==null ? null : result.getChildren()" leaf="result==null || !result.getFile().isDirectory()" />
 					<column name="`Tree`">
 						<!-- These icons are from https://icons8.com,
 							  specifically icon/11651/file and icon/21079/folder" -->
@@ -319,7 +319,7 @@
 					</column>
 				</tree>
 				<box layout="inline-layout" orientation="vertical" main-align="justify" cross-align="justify" visible="app.isTextFiltered">
-					<label value="&quot;Text Matches In &quot;+app.selectedResult.getFile().getPath()"
+					<label value="app.selectedResult==null ? `` : (`Text Matches In `+app.selectedResult.getFile().getPath())"
 						visible="app.selectedResult!=null"/>
 					<table rows="app.textMatches" selection="app.selectedTextMatch" active-value-name="match">
 						<column name="`Value`" value="match.getValue()" />
@@ -328,10 +328,9 @@
 						<column name="`Col`" value="match.getColumnNumber()" />
 					</table>
 					<text-area rows="10" editable="false">
-						<dynamic-styled-document root="app.searcher.renderTextResult2(app.selectedTextMatch)" children="node.children">
+						<dynamic-styled-document root="app.searcher.currentTextResult" children="node.getChildren()">
 							<text-style>
-								<style if="node.error" attr="with-text.font-color">`red`</style>
-								<style if="node.match" attr="with-text.font-weight">`bold`</style>
+								<style style-set="searcher.base.simpleTreeModelData" />
 							</text-style>
 						</dynamic-styled-document>
 					</text-area>

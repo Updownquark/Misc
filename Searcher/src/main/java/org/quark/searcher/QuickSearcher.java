@@ -18,8 +18,10 @@ import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedSet;
+import org.observe.quick.base.SimpleTreeModelData;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
+import org.qommons.Colors;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ThreadConstraint;
@@ -59,9 +61,10 @@ public class QuickSearcher {
 			this.parent = parent;
 			this.file = file;
 			this.locking = locking;
-			children = ObservableSortedSet.build(SearchResultNode.class,
-				(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true)).withLocking(locking)
-				.build();
+			children = ObservableSortedSet
+				.build(SearchResultNode.class,
+					(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true))
+				.withLocking(locking).build();
 			textResults = ObservableCollection.build(TextResult.class).withLocking(locking).build();
 		}
 
@@ -176,6 +179,8 @@ public class QuickSearcher {
 		Canceling
 	}
 
+	public final SimpleTreeModelData currentTextResult;
+
 	private final Transactable theLocking;
 	private final SettableValue<SearchResultNode> theResults;
 	private final SettableValue<SearchStatus> theStatus;
@@ -199,11 +204,15 @@ public class QuickSearcher {
 	public QuickSearcher(ObservableValue<BetterFile> searchBase, ObservableValue<String> fileNamePattern, //
 		ObservableCollection<PatternConfig> exclusions, ObservableValue<Double> minFileSize, ObservableValue<Double> maxFileSize,
 		ObservableValue<Instant> minFileTime, ObservableValue<Instant> maxFileTime) {
+		currentTextResult = SimpleTreeModelData.createRoot();
+
 		theLocking = Transactable.transactable(new ReentrantReadWriteLock(), this, ThreadConstraint.ANY);
-		theResults = SettableValue.build(SearchResultNode.class).withLocking(theLocking).build();
-		theSelectedResult = SettableValue.build(SearchResultNode.class).withLocking(theLocking).build();
-		theStatus = SettableValue.build(SearchStatus.class).withLocking(theLocking).withValue(SearchStatus.Idle).build();
-		theStatusMessage = SettableValue.build(String.class).withLocking(theLocking).withValue("Ready to search").build();
+		theResults = SettableValue.build(SearchResultNode.class).withDescription("results").withLocking(theLocking).build();
+		theSelectedResult = SettableValue.build(SearchResultNode.class).withDescription("selectedResult").withLocking(theLocking).build();
+		theStatus = SettableValue.build(SearchStatus.class).withDescription("status").withLocking(theLocking).withValue(SearchStatus.Idle)
+			.build();
+		theStatusMessage = SettableValue.build(String.class).withDescription("statusMessage").withLocking(theLocking)
+			.withValue("Ready to search").build();
 
 		theSearchBase = searchBase;
 		theFileNamePattern = fileNamePattern;
@@ -245,7 +254,7 @@ public class QuickSearcher {
 			testF = testF.getParent();
 		}
 		if (testF == null) {
-			return test.getPath()+" is not under search root "+searchBase.getPath();
+			return test.getPath() + " is not under search root " + searchBase.getPath();
 		}
 		System.out.println("test=" + test);
 		BetterPattern filePattern;
@@ -259,7 +268,7 @@ public class QuickSearcher {
 		if (filePattern.matcher(path).matches() != null) {
 			return null;
 		} else {
-			return test+" does not match pattern "+filePattern;
+			return test + " does not match pattern " + filePattern;
 		}
 	}
 
@@ -410,8 +419,7 @@ public class QuickSearcher {
 		try {
 			theStatusUpdateHandle.setActive(true);
 			doSearch(searchBase, filePattern, contentPattern, searchMultipleContentMatches, //
-				fileRequirements, () -> rootResult, new StringBuilder(), new FileContentSeq(maxFileMatchLength), new boolean[1],
-				result);
+				fileRequirements, () -> rootResult, new StringBuilder(), new FileContentSeq(maxFileMatchLength), new boolean[1], result);
 			succeeded = true;
 		} finally {
 			long end = System.currentTimeMillis();
@@ -715,155 +723,42 @@ public class QuickSearcher {
 		return new TextResult(fileResult, position, lineNumber, columnNumber, match.toString(), match.getGroups());
 	}
 
-	public static class TextNode {
-		public final String text;
-		public final boolean error;
-		public final boolean match;
-		public final List<TextNode> children;
-
-		public TextNode(String text, boolean error, boolean match, List<TextNode> children) {
-			this.text = text;
-			this.error = error;
-			this.match = match;
-			this.children = children;
-		}
-	}
-
-	public TextNode renderTextResult2(TextResult result) {
+	public void renderTextResult(TextResult result) {
+		currentTextResult.clearAll();
 		if (result == null) {
-			return null;
+			return;
 		}
 		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
 			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
 			if (result.lineNumber > 3) {
 				seq.goToLine(reader, result.lineNumber - 3);
 				if (seq.getLine() < result.lineNumber - 3) {
-					return new TextNode("**Content changed!!**", true, false, null);
+					currentTextResult.inBatch(td -> td.fg().set(Colors.red).bold().append("**Content changed**"));
+					return;
 				}
 			}
-			List<TextNode> children = new ArrayList<>();
-			TextNode root = new TextNode(null, false, false, children);
-			StringBuilder text = new StringBuilder("<html>");
+			SimpleTreeModelData text = currentTextResult;
 			if (seq.getPosition() > 0) {
 				text.append("...\n");
 			}
 			boolean appending = true;
 			boolean hasMore = false;
-			boolean started = false, ended = false;
-			boolean error = false, match = false;
 			while (appending) {
 				long charPos = seq.getPosition();
+				boolean started = false, ended = false;
 				for (int i = 0; i < seq.length(); i++, charPos++) {
 					if (!started) {
 						if (charPos == result.position) {
 							started = true;
-							if (text.length() > 0) {
-								children.add(new TextNode(text.toString(), error, match, null));
-								text.setLength(0);
-							}
-							error = false;
-							match = true;
+							text = text.branch().bold().fg().set(Colors.red);
 						}
 					} else if (!ended) {
 						if (charPos == result.position + result.value.length()) {
 							ended = true;
-							if (text.length() > 0) {
-								children.add(new TextNode(text.toString(), error, match, null));
-								text.setLength(0);
-							}
-						} else if (seq.charAt(i) != result.value.charAt((int) (charPos - result.position))) {
-							if (text.length() > 0) {
-								children.add(new TextNode(text.toString(), error, match, null));
-								text.setLength(0);
-							}
-							children.add(new TextNode("**Content changed!!**", true, false, null));
-							return root;
-						}
-					} else if (seq.getLine() > result.lineNumber + 6) {
-						appending = false;
-						hasMore = i < seq.length() || reader.read() > 0;
-						break;
-					}
-					switch (seq.charAt(i)) {
-					case '\n':
-						text.append("<br>\n");
-						break;
-					case '\r':
-					case '\b':
-					case '\f':
-						break;
-					case '\t':
-						text.append("<&nbsp;&nbsp;&nbsp;&nbsp;");
-						break;
-					case '<':
-						text.append("&lt;");
-						break;
-					case '>':
-						text.append("&gt;");
-						break;
-					case '&':
-						text.append("&");
-						break;
-					default:
-						text.append(seq.charAt(i));
-						break;
-					}
-				}
-				if (appending) {
-					appending = seq.advance(reader, -1);
-				}
-			}
-
-			if (hasMore) {
-				text.append("...");
-			}
-			if (text.length() > 0) {
-				children.add(new TextNode(text.toString(), error, match, null));
-			}
-			return root;
-		} catch (IOException e) {
-			return new TextNode("*Could not re-read* " + result.value, true, false, null);
-		}
-	}
-
-	/**
-	 * @param result The text result to render
-	 * @return The HTML text to render for the user showing the text match in the context of its sub-section of the rest of the file
-	 */
-	public static String renderTextResult(TextResult result) {
-		if (result == null) {
-			return null;
-		}
-		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
-			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
-			if (result.lineNumber > 3) {
-				seq.goToLine(reader, result.lineNumber - 3);
-				if (seq.getLine() < result.lineNumber - 3) {
-					return "<html><b><font color=\"red\">**Content changed!!**";
-				}
-			}
-			StringBuilder text = new StringBuilder("<html>");
-			if (seq.getPosition() > 0) {
-				text.append("...<br>\n");
-			}
-			boolean appending = true;
-			boolean hasMore = false;
-			boolean started = false, ended = false;
-			while (appending) {
-				long charPos = seq.getPosition();
-				for (int i = 0; i < seq.length(); i++, charPos++) {
-					if (!started) {
-						if (charPos == result.position) {
-							started = true;
-							text.append("<b><font color=\"red\">");
-						}
-					} else if (!ended) {
-						if (charPos == result.position + result.value.length()) {
-							ended = true;
-							text.append("</font></b>");
+							text = text.getParent();
 						} else if (seq.charAt(i) != result.value.charAt((int) (charPos - result.position))) {
 							text.append("**Content changed!!**");
-							return text.toString();
+							return;
 						}
 					} else if (seq.getLine() > result.lineNumber + 6) {
 						appending = false;
@@ -872,23 +767,14 @@ public class QuickSearcher {
 					}
 					switch (seq.charAt(i)) {
 					case '\n':
-						text.append("<br>\n");
+						text.append("\n");
 						break;
 					case '\r':
 					case '\b':
 					case '\f':
 						break;
 					case '\t':
-						text.append("<&nbsp;&nbsp;&nbsp;&nbsp;");
-						break;
-					case '<':
-						text.append("&lt;");
-						break;
-					case '>':
-						text.append("&gt;");
-						break;
-					case '&':
-						text.append("&");
+						text.append("    ");
 						break;
 					default:
 						text.append(seq.charAt(i));
@@ -903,15 +789,15 @@ public class QuickSearcher {
 			if (hasMore) {
 				text.append("...");
 			}
-			return text.toString();
 		} catch (IOException e) {
-			return "*Could not re-read* " + result.value;
+			e.printStackTrace();
+			currentTextResult.append("*Could not re-read* " + result.value);
 		}
 	}
 
 	public static void initializeFileRequirements(Map<FileBooleanAttribute, FileAttributeRequirement> requirements) {
 		for (FileBooleanAttribute attr : FileBooleanAttribute.values()) {
-			requirements.computeIfAbsent(attr, __->FileAttributeRequirement.Maybe);
+			requirements.computeIfAbsent(attr, __ -> FileAttributeRequirement.Maybe);
 		}
 	}
 }
