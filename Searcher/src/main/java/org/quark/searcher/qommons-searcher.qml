@@ -56,6 +56,7 @@
 
 				<value name="mainSplitDiv" type="double" default="25" />
 				<value name="rightSplitDiv" type="double" default="40" />
+				<value name="textMatchSplitDiv" type="double" default="40" />
 			</config>
 			<model name="app">
 				<constant name="searcher">new QuickSearcher(config.searchBase, config.fileNamePattern,
@@ -318,15 +319,17 @@
 							icon="&quot;icons/icons8-&quot;+(result.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
 					</column>
 				</tree>
-				<box layout="inline-layout" orientation="vertical" main-align="justify" cross-align="justify" visible="app.isTextFiltered">
-					<label value="app.selectedResult==null ? `` : (`Text Matches In `+app.selectedResult.getFile().getPath())"
-						visible="app.selectedResult!=null"/>
-					<table rows="app.textMatches" selection="app.selectedTextMatch" active-value-name="match">
-						<column name="`Value`" value="match.getValue()" />
-						<column name="`Pos`" value="match.getPosition()" />
-						<column name="`Line`" value="match.getLineNumber()" />
-						<column name="`Col`" value="match.getColumnNumber()" />
-					</table>
+				<split orientation="vertical" split-position="config.textMatchSplitDiv * `1%`">
+					<box layout="inline-layout" orientation="vertical" main-align="justify" cross-align="justify" visible="app.isTextFiltered">
+						<label value="app.selectedResult==null ? `` : (`Text Matches In `+app.selectedResult.getFile().getPath())"
+							visible="app.selectedResult!=null"/>
+						<table rows="app.textMatches" selection="app.selectedTextMatch" active-value-name="match">
+							<column name="`Value`" value="match.getValue()" />
+							<column name="`Pos`" value="match.getPosition()" />
+							<column name="`Line`" value="match.getLineNumber()" />
+							<column name="`Col`" value="match.getColumnNumber()" />
+						</table>
+					</box>
 					<text-area rows="10" editable="false">
 						<dynamic-styled-document root="app.searcher.currentTextResult" children="node.getChildren()">
 							<text-style>
@@ -334,7 +337,7 @@
 							</text-style>
 						</dynamic-styled-document>
 					</text-area>
-				</box>
+				</split>
 			</split>
 		</split>
 		<label value="app.statusMessage" />

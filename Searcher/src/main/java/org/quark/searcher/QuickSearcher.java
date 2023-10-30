@@ -18,7 +18,7 @@ import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedSet;
-import org.observe.quick.base.SimpleTreeModelData;
+import org.observe.quick.base.SimpleStyledTextModel;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.qommons.Colors;
@@ -26,6 +26,7 @@ import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
+import org.qommons.Transaction;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.RRWLockingStrategy;
@@ -179,7 +180,7 @@ public class QuickSearcher {
 		Canceling
 	}
 
-	public final SimpleTreeModelData currentTextResult;
+	public final ObservableValue<SimpleStyledTextModel> currentTextResult;
 
 	private final Transactable theLocking;
 	private final SettableValue<SearchResultNode> theResults;
@@ -204,7 +205,7 @@ public class QuickSearcher {
 	public QuickSearcher(ObservableValue<BetterFile> searchBase, ObservableValue<String> fileNamePattern, //
 		ObservableCollection<PatternConfig> exclusions, ObservableValue<Double> minFileSize, ObservableValue<Double> maxFileSize,
 		ObservableValue<Instant> minFileTime, ObservableValue<Instant> maxFileTime) {
-		currentTextResult = SimpleTreeModelData.createRoot();
+		currentTextResult = SimpleStyledTextModel.createRoot();
 
 		theLocking = Transactable.transactable(new ReentrantReadWriteLock(), this, ThreadConstraint.ANY);
 		theResults = SettableValue.build(SearchResultNode.class).withDescription("results").withLocking(theLocking).build();
@@ -724,20 +725,23 @@ public class QuickSearcher {
 	}
 
 	public void renderTextResult(TextResult result) {
-		currentTextResult.clearAll();
 		if (result == null) {
+			currentTextResult.get().clearAll();
 			return;
 		}
-		try (Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
+		try (Transaction t = currentTextResult.get().batch(); //
+			Reader reader = new BufferedReader(new InputStreamReader(result.fileResult.file.read()))) {
+			currentTextResult.get().clearAll();
+
 			FileContentSeq seq = new FileContentSeq((int) Math.min(1000, result.columnNumber * 5));
 			if (result.lineNumber > 3) {
 				seq.goToLine(reader, result.lineNumber - 3);
 				if (seq.getLine() < result.lineNumber - 3) {
-					currentTextResult.inBatch(td -> td.fg().set(Colors.red).bold().append("**Content changed**"));
+					currentTextResult.get().inBatch(td -> td.fg().set(Colors.red).bold().append("**Content changed**"));
 					return;
 				}
 			}
-			SimpleTreeModelData text = currentTextResult;
+			SimpleStyledTextModel text = currentTextResult.get();
 			if (seq.getPosition() > 0) {
 				text.append("...\n");
 			}
@@ -755,7 +759,7 @@ public class QuickSearcher {
 					} else if (!ended) {
 						if (charPos == result.position + result.value.length()) {
 							ended = true;
-							text = text.getParent();
+							text = text.getParent().branch();
 						} else if (seq.charAt(i) != result.value.charAt((int) (charPos - result.position))) {
 							text.append("**Content changed!!**");
 							return;
@@ -787,11 +791,11 @@ public class QuickSearcher {
 			}
 
 			if (hasMore) {
-				text.append("...");
+				currentTextResult.get().branch().append("...");
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
-			currentTextResult.append("*Could not re-read* " + result.value);
+			currentTextResult.get().append("*Could not re-read* " + result.value);
 		}
 	}
 
