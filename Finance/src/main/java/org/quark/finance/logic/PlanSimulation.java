@@ -2,35 +2,14 @@ package org.quark.finance.logic;
 
 import java.awt.EventQueue;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TimeZone;
+import java.util.*;
 
 import org.observe.Observable;
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
-import org.observe.expresso.CompiledExpressoEnv;
-import org.observe.expresso.ExpressoInterpretationException;
-import org.observe.expresso.InterpretedExpressoEnv;
-import org.observe.expresso.ModelInstantiationException;
+import org.observe.expresso.*;
 import org.observe.expresso.ModelType.ModelInstanceType;
-import org.observe.expresso.ModelTypes;
-import org.observe.expresso.ObservableExpression;
-import org.observe.expresso.ObservableModelSet;
-import org.observe.expresso.ObservableModelSet.CompiledModelValue;
-import org.observe.expresso.ObservableModelSet.InterpretedModelSet;
-import org.observe.expresso.ObservableModelSet.InterpretedValueSynth;
-import org.observe.expresso.ObservableModelSet.ModelComponentId;
-import org.observe.expresso.ObservableModelSet.ModelInstantiator;
-import org.observe.expresso.ObservableModelSet.ModelSetInstance;
-import org.observe.expresso.ObservableModelSet.ModelValueInstantiator;
-import org.observe.expresso.TypeConversionException;
+import org.observe.expresso.ObservableModelSet.*;
 import org.observe.util.TypeTokens;
 import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
@@ -40,14 +19,8 @@ import org.qommons.ex.ExceptionHandler;
 import org.qommons.io.FilePosition;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.threading.QommonsTimer;
-import org.quark.finance.entities.AssetGroup;
-import org.quark.finance.entities.Fund;
-import org.quark.finance.entities.Plan;
-import org.quark.finance.entities.PlanComponent;
-import org.quark.finance.entities.PlanVariable;
-import org.quark.finance.entities.PlanVariableType;
+import org.quark.finance.entities.*;
 import org.quark.finance.entities.Process;
-import org.quark.finance.entities.ProcessAction;
 
 public class PlanSimulation {
 	static boolean DEBUG = false;
@@ -76,12 +49,12 @@ public class PlanSimulation {
 		ObservableModelSet.Builder modelBuilder = ObservableModelSet.build("simulation", ObservableModelSet.JAVA_NAME_CHECKER);
 		env = env.with(modelBuilder);
 		modelBuilder.with("CurrentDate",
-			InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
-				SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(plan.getCurrentDate()).build(), "CurrentDate"),
-			null);
+				InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
+						SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(plan.getCurrentDate()).build(), "CurrentDate"),
+				null);
 		theVariables.put("CurrentDate", modelBuilder.getLocalComponent("CurrentDate").getIdentity());
 		modelBuilder.with("PlanStart", InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
-			SettableValue.of(Instant.class, plan.getCurrentDate(), "PlanStart cannot be modified"), "PlanStart"), null);
+				SettableValue.of(Instant.class, plan.getCurrentDate(), "PlanStart cannot be modified"), "PlanStart"), null);
 		theVariables.put("PlanStart", modelBuilder.getLocalComponent("PlanStart").getIdentity());
 		env = env.with(modelBuilder);
 
@@ -117,7 +90,7 @@ public class PlanSimulation {
 	}
 
 	public Interpreted interpret(InterpretedExpressoEnv env)
-		throws ExpressoInterpretationException, TypeConversionException {
+			throws ExpressoInterpretationException, TypeConversionException {
 		return new Interpreted(this, env);
 	}
 
@@ -127,7 +100,7 @@ public class PlanSimulation {
 		private final InterpretedExpressoEnv theEnv;
 
 		Interpreted(PlanSimulation def, InterpretedExpressoEnv env)
-			throws ExpressoInterpretationException, TypeConversionException {
+				throws ExpressoInterpretationException, TypeConversionException {
 			theDefinition = def;
 			env = env.forChild(def.getEnv());
 			env.getModels().interpret(env);
@@ -152,7 +125,7 @@ public class PlanSimulation {
 			return theEnv;
 		}
 
-		public Instantiator instantiate() {
+		public Instantiator instantiate() throws ModelInstantiationException {
 			return new Instantiator(this);
 		}
 	}
@@ -163,7 +136,7 @@ public class PlanSimulation {
 		private final List<ProcessData.Instantiator> theProcesses;
 		private final ModelInstantiator theModels;
 
-		Instantiator(Interpreted interpreted) {
+		Instantiator(Interpreted interpreted) throws ModelInstantiationException {
 			thePlan = interpreted.getDefinition().getPlan();
 			theVariables = interpreted.getDefinition().theVariables;
 			theModels = interpreted.getEnv().getModels().instantiate();
@@ -186,7 +159,7 @@ public class PlanSimulation {
 			return theModels;
 		}
 
-		public void instantiate() {
+		public void instantiate() throws ModelInstantiationException {
 			theModels.instantiate();
 			for (ProcessData.Instantiator process : theProcesses) {
 				process.instantiate();
@@ -240,7 +213,7 @@ public class PlanSimulation {
 				frames.add(frame);
 			}
 			SimulationResults results = new SimulationResults(this, //
-				frames.toArray(new Instant[frames.size()]), finished, new LinkedHashMap<>());
+					frames.toArray(new Instant[frames.size()]), finished, new LinkedHashMap<>());
 			if (start == null || end == null || thePlan.getCurrentDate() == null || thePlan.getCurrentDate().compareTo(end) >= 0) {
 				finished.set(true, null);
 				return results;
@@ -376,7 +349,7 @@ public class PlanSimulation {
 	}
 
 	static void install(PlanComponent vbl, ObservableModelSet.Builder modelBuilder, CompiledExpressoEnv env,
-		Map<String, ModelComponentId> variables) {
+			Map<String, ModelComponentId> variables) {
 		if (vbl.getName() == null || vbl.getName().isEmpty()) {
 			return;
 		}
@@ -389,7 +362,7 @@ public class PlanSimulation {
 				}
 				try {
 					InterpretedValueSynth<SettableValue<?>, ?> interpreted = value.evaluate(ModelTypes.Value.any(), iEnv, 0,
-						ExceptionHandler.thrower2());
+							ExceptionHandler.thrower2());
 					Class<?> type = TypeTokens.get().wrap(TypeTokens.getRawType(interpreted.getType().getType(0)));
 					if (Number.class.isAssignableFrom(type)) {
 						EventQueue.invokeLater(() -> ((PlanVariable) vbl).setVariableType(PlanVariableType.Number));
@@ -407,11 +380,11 @@ public class PlanSimulation {
 					error(vbl, e.getMessage(), false);
 					int pos = e.getErrorOffset();
 					throw new ExpressoInterpretationException(e.getMessage(),
-						new LocatedFilePosition(vbl.getName(), new FilePosition(pos, 0, pos)), e.getErrorLength(), e);
+							new LocatedFilePosition(vbl.getName(), new FilePosition(pos, 0, pos)), e.getErrorLength(), e);
 				} catch (TypeConversionException e) {
 					vbl.setError(e.getMessage());
 					throw new ExpressoInterpretationException(e.getMessage(), new LocatedFilePosition(vbl.getName(), FilePosition.START),
-						value.getExpressionLength(), e);
+							value.getExpressionLength(), e);
 				}
 			}), null);
 		} else { // Fund balance. Initialized, not slaved, to the value
@@ -423,18 +396,18 @@ public class PlanSimulation {
 					error(vbl, e.getMessage(), false);
 					int pos = e.getErrorOffset();
 					throw new ExpressoInterpretationException(e.getMessage(),
-						new LocatedFilePosition(vbl.getName(), new FilePosition(pos, 0, pos)), e.getErrorLength(), e);
+							new LocatedFilePosition(vbl.getName(), new FilePosition(pos, 0, pos)), e.getErrorLength(), e);
 				} catch (TypeConversionException e) {
 					error(vbl, e.getMessage(), false);
 					throw new ExpressoInterpretationException(e.getMessage(), new LocatedFilePosition(vbl.getName(), FilePosition.START),
-						value.getExpressionLength(), e);
+							value.getExpressionLength(), e);
 				}
 				return InterpretedValueSynth.of(MONEY_TYPE, () -> {
 					ModelValueInstantiator<SettableValue<Money>> initialBalanceInstantiator;
 					initialBalanceInstantiator = interpretedInitBalance == null ? null : interpretedInitBalance.instantiate();
 					return ModelValueInstantiator.of(msi -> {
 						SettableValue.Builder<Money> initBalanceBuilder = SettableValue.build(Money.class)//
-							.withDescription(vbl.getName() + "_balance");
+								.withDescription(vbl.getName() + "_balance");
 						if (initialBalanceInstantiator != null) {
 							initialBalanceInstantiator.instantiate();
 							SettableValue<Money> initBalance = initialBalanceInstantiator.get(msi);
@@ -478,7 +451,7 @@ public class PlanSimulation {
 		public final long[][] processGroupAmounts;
 
 		public SimulationResults(PlanSimulation.Instance sim, Instant[] frames, ObservableValue<Boolean> finished,
-			Map<String, ModelComponentId> variables) {
+				Map<String, ModelComponentId> variables) {
 			simulation = sim;
 			this.finished = finished;
 			funds = sim.getPlan().getFunds().getValues().toArray();
@@ -517,8 +490,8 @@ public class PlanSimulation {
 			theVariables = new LinkedHashMap<>();
 			if (!process.getLocalVariables().getValues().isEmpty()) {
 				ObservableModelSet.Builder modelBuilder = ObservableModelSet
-					.build("process[" + process.getName() + "].local", ObservableModelSet.JAVA_NAME_CHECKER)//
-					.withAll(env.getModels());
+						.build("process[" + process.getName() + "].local", ObservableModelSet.JAVA_NAME_CHECKER)//
+						.withAll(env.getModels());
 				env = env.with(modelBuilder);
 				for (PlanVariable vbl : process.getLocalVariables().getValues()) {
 					error(vbl, null, false);
@@ -584,7 +557,7 @@ public class PlanSimulation {
 				if (definition.getProcess().getStart() != null) {
 					try {
 						start = definition.getProcess().getStart().evaluate(ModelTypes.Value.forType(Instant.class), env, 0,
-							ExceptionHandler.thrower2());
+								ExceptionHandler.thrower2());
 					} catch (ExpressoInterpretationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
@@ -595,7 +568,7 @@ public class PlanSimulation {
 				if (definition.getProcess().getEnd() != null) {
 					try {
 						end = definition.getProcess().getEnd().evaluate(ModelTypes.Value.forType(Instant.class), env, 0,
-							ExceptionHandler.thrower2());
+								ExceptionHandler.thrower2());
 					} catch (ExpressoInterpretationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
@@ -606,7 +579,7 @@ public class PlanSimulation {
 				if (definition.getProcess().getActive() != null) {
 					try {
 						active = definition.getProcess().getActive().evaluate(ModelTypes.Value.forType(boolean.class), env, 0,
-							ExceptionHandler.thrower2());
+								ExceptionHandler.thrower2());
 					} catch (ExpressoInterpretationException | TypeConversionException e) {
 						error(theDefinition.getProcess(), e.getMessage(), true);
 						e.printStackTrace();
@@ -650,7 +623,7 @@ public class PlanSimulation {
 				return isActive;
 			}
 
-			public Instantiator instantiate() {
+			public Instantiator instantiate() throws ModelInstantiationException {
 				return new Instantiator(this);
 			}
 		}
@@ -665,7 +638,7 @@ public class PlanSimulation {
 			private final ModelValueInstantiator<SettableValue<Boolean>> isActive;
 			private final List<ProcessActionData.Instantiator> theActions;
 
-			Instantiator(Interpreted interpreted) {
+			Instantiator(Interpreted interpreted) throws ModelInstantiationException {
 				theProcess = interpreted.getDefinition().getProcess();
 				theProcessIndex = interpreted.getDefinition().getProcessIndex();
 				theModels = interpreted.getModels() == null ? null : interpreted.getModels().instantiate();
@@ -707,7 +680,7 @@ public class PlanSimulation {
 				return theActions;
 			}
 
-			public void instantiate() {
+			public void instantiate() throws ModelInstantiationException {
 				if (theModels != null) {
 					theModels.instantiate();
 				}
@@ -827,7 +800,7 @@ public class PlanSimulation {
 			}
 
 			public void run(Map<String, SettableValue<Money>> fundBalances, Map<String, Integer> fundIndexes, TimeZone timeZone,
-				SimulationResults results, int frame) {
+					SimulationResults results, int frame) {
 				if (isActive != null && isActive.get()) {
 					for (ProcessActionData.Instance action : theActions) {
 						if (action != null) {
@@ -889,7 +862,7 @@ public class PlanSimulation {
 			return theAmount;
 		}
 
-		public Instantiator instantiate() {
+		public Instantiator instantiate() throws ModelInstantiationException {
 			return new Instantiator(this);
 		}
 
@@ -904,14 +877,14 @@ public class PlanSimulation {
 			private final Fund theFund;
 			private final ModelValueInstantiator<SettableValue<Money>> theAmount;
 
-			Instantiator(ProcessActionData interpreted) {
+			Instantiator(ProcessActionData interpreted) throws ModelInstantiationException {
 				theAction = interpreted.getAction();
 				theActionIndex = interpreted.getActionIndex();
 				theFund = interpreted.getFund();
 				theAmount = interpreted.getAmount() == null ? null : interpreted.getAmount().instantiate();
 			}
 
-			public void instantiate() {
+			public void instantiate() throws ModelInstantiationException {
 				if (theAmount != null) {
 					theAmount.instantiate();
 				}
@@ -977,7 +950,7 @@ public class PlanSimulation {
 			}
 
 			public void run(Map<String, SettableValue<Money>> fundBalances, Map<String, Integer> fundIndexes, SimulationResults results,
-				int processIndex, int frame) {
+					int processIndex, int frame) {
 				if (theAmount == null) {
 					return;
 				}
