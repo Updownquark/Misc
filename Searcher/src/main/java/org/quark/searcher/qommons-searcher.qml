@@ -245,7 +245,7 @@
 				<check-box value="config.multiContentMatches" field-label="`Multiple Text Matches:`"
 					disable-with="app.searchUIEnabled || (app.isTextFiltered ? null : &quot;No text matcher specified&quot;)" />
 				<spacer length="3" />
-				<collapse-pane fill="true" name="debug">
+				<collapse-pane fill="true" name="`debug`">
 					<box role="header" layout="inline-layout" orientation="vertical" main-align="center">
 						<label>----File Metadata----</label>
 					</box>
@@ -297,10 +297,10 @@
 							<check-box />
 						</column-edit>
 					</column>
-					<multi-value-action icon="&quot;icons/add.png&quot;" allow-for-empty="true">
+					<multi-value-action icon="&quot;/icons/add.png&quot;" allow-for-empty="true">
 						config.excludedFileNames.create().create()
 					</multi-value-action>
-					<multi-value-action icon="&quot;icons/remove.png&quot;" allow-for-empty="false">
+					<multi-value-action icon="&quot;/icons/remove.png&quot;" allow-for-empty="false">
 						config.excludedFileNames.getValues().removeAll(actionValues)
 					</multi-value-action>
 				</table>
@@ -310,13 +310,16 @@
 				</box>
 			</field-panel>
 			<split orientation="vertical" split-position="config.rightSplitDiv * `1%`">
+				<model>
+					<hook name="debug" on="app.selectedResult">System.out.println("Selected "+app.selectedResult)</hook>
+				</model>
 				<tree active-node-name="result" node-selection="app.selectedResult">
 					<dynamic-tree-model value="app.resultRoot" children="result==null ? null : result.getChildren()" leaf="result==null || !result.getFile().isDirectory()" />
 					<column name="`Tree`">
 						<!-- These icons are from https://icons8.com,
 							  specifically icon/11651/file and icon/21079/folder" -->
 						<label value="result.getFile().getName()"
-							icon="&quot;icons/icons8-&quot;+(result.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
+							icon="&quot;/icons/icons8-&quot;+(result.getFile().isDirectory() ? &quot;folder-16.png&quot; : &quot;file-50-filled.png&quot;)" />
 					</column>
 				</tree>
 				<split orientation="vertical" split-position="config.textMatchSplitDiv * `1%`">

@@ -50,11 +50,12 @@ public class PlanSimulation {
 		env = env.with(modelBuilder);
 		modelBuilder.with("CurrentDate",
 				InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
-						SettableValue.build(Instant.class).withDescription("CurrentDate").withValue(plan.getCurrentDate()).build(), "CurrentDate"),
+						SettableValue.<Instant> build().withDescription("CurrentDate").withValue(plan.getCurrentDate()).build(),
+						"CurrentDate"),
 				null);
 		theVariables.put("CurrentDate", modelBuilder.getLocalComponent("CurrentDate").getIdentity());
 		modelBuilder.with("PlanStart", InterpretedValueSynth.literal(ModelTypes.Value.forType(Instant.class),
-				SettableValue.of(Instant.class, plan.getCurrentDate(), "PlanStart cannot be modified"), "PlanStart"), null);
+				SettableValue.of(plan.getCurrentDate(), "PlanStart cannot be modified"), "PlanStart"), null);
 		theVariables.put("PlanStart", modelBuilder.getLocalComponent("PlanStart").getIdentity());
 		env = env.with(modelBuilder);
 
@@ -206,7 +207,7 @@ public class PlanSimulation {
 		}
 
 		public SimulationResults run(Instant start, Instant end, ParsedDuration resolution) {
-			SettableValue<Boolean> finished = SettableValue.build(boolean.class).withValue(false).build();
+			SettableValue<Boolean> finished = SettableValue.<Boolean> build().withValue(false).build();
 			List<Instant> frames = new ArrayList<>();
 			TimeZone zone = TimeZone.getDefault();
 			for (Instant frame = start; frame.compareTo(end) <= 0; frame = resolution.addTo(frame, zone)) {
@@ -406,7 +407,7 @@ public class PlanSimulation {
 					ModelValueInstantiator<SettableValue<Money>> initialBalanceInstantiator;
 					initialBalanceInstantiator = interpretedInitBalance == null ? null : interpretedInitBalance.instantiate();
 					return ModelValueInstantiator.of(msi -> {
-						SettableValue.Builder<Money> initBalanceBuilder = SettableValue.build(Money.class)//
+						SettableValue.Builder<Money> initBalanceBuilder = SettableValue.<Money> build()//
 								.withDescription(vbl.getName() + "_balance");
 						if (initialBalanceInstantiator != null) {
 							initialBalanceInstantiator.instantiate();
@@ -454,9 +455,9 @@ public class PlanSimulation {
 				Map<String, ModelComponentId> variables) {
 			simulation = sim;
 			this.finished = finished;
-			funds = sim.getPlan().getFunds().getValues().toArray();
-			processes = sim.getPlan().getProcesses().getValues().toArray();
-			groups = sim.getPlan().getGroups().getValues().toArray();
+			funds = sim.getPlan().getFunds().getValues().toArray(new Fund[0]);
+			processes = sim.getPlan().getProcesses().getValues().toArray(new Process[0]);
+			groups = sim.getPlan().getGroups().getValues().toArray(new AssetGroup[0]);
 			processActions = new ProcessAction[processes.length][];
 			this.frames = frames;
 			fundBalances = new long[sim.getPlan().getFunds().getValues().size()][frames.length];
@@ -466,7 +467,7 @@ public class PlanSimulation {
 			processActionAmounts = new long[processAmounts.length][][];
 			int p = 0;
 			for (Process process : processes) {
-				processActions[p] = process.getActions().getValues().toArray();
+				processActions[p] = process.getActions().getValues().toArray(new ProcessAction[0]);
 				processActionAmounts[p] = new long[processActions[p].length][frames.length];
 				p++;
 			}

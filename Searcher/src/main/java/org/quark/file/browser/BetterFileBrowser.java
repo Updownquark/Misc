@@ -17,12 +17,7 @@ import org.observe.collect.DataControlledCollection;
 import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedCollection;
 import org.observe.file.ObservableFile;
-import org.observe.util.swing.CategoryRenderStrategy;
-import org.observe.util.swing.JustifiedBoxLayout;
-import org.observe.util.swing.ModelCell;
-import org.observe.util.swing.ObservableSwingUtils;
-import org.observe.util.swing.PanelPopulation;
-import org.observe.util.swing.WindowPopulation;
+import org.observe.util.swing.*;
 import org.qommons.LambdaUtils;
 import org.qommons.io.ArchiveEnabledFileSource;
 import org.qommons.io.BetterFile;
@@ -51,11 +46,10 @@ public class BetterFileBrowser extends JPanel {
 	public BetterFileBrowser(FileDataSource dataSource, ObservableFile workingDir) {
 		theDataSource = dataSource;
 		theWorkingDir = workingDir;
-		theFile = SettableValue.build(ObservableFile.class).withValue(ObservableFile.observe(theWorkingDir)).build();
+		theFile = SettableValue.<ObservableFile> build().withValue(ObservableFile.observe(theWorkingDir)).build();
 		theRoots = ObservableFile.getRoots(dataSource);
 		theCurrentContent = theFile.map(f -> f == null ? theRoots : f.listFiles());
-		theContent = ObservableCollection.flattenValue(theCurrentContent).flow()
-				.sorted(BetterFile.DISTINCT_NUMBER_TOLERANT).collect();
+		theContent = ObservableCollection.flattenValue(theCurrentContent).flow().sorted(BetterFile.DISTINCT_NUMBER_TOLERANT).collect();
 		isRefreshing = ObservableValue.flatten(theCurrentContent.<ObservableValue<Boolean>> map(c -> c.isRefreshing()));
 
 		ObservableSwingUtils.onEQ(this::initComponents);
@@ -67,38 +61,35 @@ public class BetterFileBrowser extends JPanel {
 
 	private void initComponents() {
 		// Table, up, file path
-		SettableValue<ObservableFile> selectedFile = SettableValue.build(ObservableFile.class).build();
+		SettableValue<ObservableFile> selectedFile = SettableValue.<ObservableFile> build().build();
 		PanelPopulation.populateVPanel(this, null)//
-				.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), p -> {
-					p.fill().addTextField(null, theFile, new ObservableFile.FileFormat(theDataSource, theWorkingDir, true),
-							tf -> tf.fill().modifyEditor(tf2 -> tf2.setReformatOnCommit(true)))//
-							.addButton("..", this::navigateUp,
-									btn -> btn.disableWith(theFile.map(f -> f == null ? "No parent" : null)))
-					;
-				}).addSplit(true, split -> split.fill().fillV().withSplitProportion(0.5)//
-						.firstV(splitTop -> splitTop.fill().fillV().addTable(theContent, table -> {
-							table.fill().fillV().withNameColumn(BetterFile::getName, null, true, col -> col.withWidths(50, 200, 10000)
-									.withMouseListener(new CategoryRenderStrategy.CategoryMouseAdapter<ObservableFile, String>() {
-										@Override
-										public void mouseClicked(ModelCell<? extends ObservableFile, ? extends String> cell, MouseEvent e) {
-											if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2
-													&& cell.getModelValue().isDirectory()) {
-												theFile.set(cell.getModelValue(), e);
-											}
-										}
-									}))//
-									.withColumn("Last Modified", Instant.class, f -> {
-										long lastMod = f.getLastModified();
-										return lastMod == 0 ? Instant.ofEpochMilli(lastMod) : null;
-									}, col -> col.withWidths(50, 130, 200).withMutation(
-											m -> m.asText(SpinnerFormat.flexDate(Instant::now, "EEE d MMM yyyy", null))))//
-									.withColumn("Size", long.class, BetterFile::length,
-											col -> col.withWidths(20, 50, 100)
-								.formatText(sz -> sz < 0 ? "?" : SIZE_FORMAT.format(sz * 1.0))//
-								.withValueTooltip((f, sz) -> Format.LONG.withGroupingSeparator(',').format(sz)))//
-									.withSelection(selectedFile, false);
-						})).lastV(splitBottom -> splitBottom.fill().fillV().addComponent(null, new FileContentViewer(selectedFile),
-								f -> f.fill().fillV())));
+		.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), p -> {
+			p.fill().addTextField(null, theFile, new ObservableFile.FileFormat(theDataSource, theWorkingDir, true),
+					tf -> tf.fill().modifyEditor(tf2 -> tf2.setReformatOnCommit(true)))//
+			.addButton("..", this::navigateUp, btn -> btn.disableWith(theFile.map(f -> f == null ? "No parent" : null)));
+		}).addSplit(true, split -> split.fill().fillV().withSplitProportion(0.5)//
+				.firstV(splitTop -> splitTop.fill().fillV().addTable(theContent, table -> {
+					table.fill().fillV().withNameColumn(BetterFile::getName, null, true, col -> col.withWidths(50, 200, 10000)
+							.withMouseListener(new CategoryRenderStrategy.CategoryMouseAdapter<ObservableFile, String>() {
+								@Override
+								public void mouseClicked(ModelCell<? extends ObservableFile, ? extends String> cell, MouseEvent e) {
+									if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2
+											&& cell.getModelValue().isDirectory()) {
+										theFile.set(cell.getModelValue(), e);
+									}
+								}
+							}))//
+					.withColumn("Last Modified", Instant.class, f -> {
+						long lastMod = f.getLastModified();
+						return lastMod == 0 ? Instant.ofEpochMilli(lastMod) : null;
+					}, col -> col.withWidths(50, 130, 200)
+							.withMutation(m -> m.asText(SpinnerFormat.flexDate(Instant::now, "EEE d MMM yyyy", null))))//
+					.withColumn("Size", long.class, BetterFile::length,
+							col -> col.withWidths(20, 50, 100).formatText(sz -> sz < 0 ? "?" : SIZE_FORMAT.format(sz * 1.0))//
+							.withValueTooltip((f, sz) -> Format.LONG.withGroupingSeparator(',').format(sz)))//
+					.withSelection(selectedFile, false);
+				})).lastV(splitBottom -> splitBottom.fill().fillV().addComponent(null, new FileContentViewer(selectedFile),
+						f -> f.fill().fillV())));
 		isRefreshing.changes().act(new Consumer<ObservableValueEvent<Boolean>>() {
 			// We don't want to flash the wait cursor every second for trivial refreshes,
 			// but if refresh takes a while, tell the user about it
@@ -109,8 +100,8 @@ public class BetterFileBrowser extends JPanel {
 				isRefreshingNow = evt.getNewValue();
 				if (isRefreshingNow) {
 					QommonsTimer.getCommonInstance()
-							.build(LambdaUtils.printableRunnable(this::checkCursor, "checkCursor", null), null, false)
-							.runNextIn(Duration.ofMillis(100));
+					.build(LambdaUtils.printableRunnable(this::checkCursor, "checkCursor", null), null, false)
+					.runNextIn(Duration.ofMillis(100));
 				} else {
 					setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
 				}
@@ -138,14 +129,14 @@ public class BetterFileBrowser extends JPanel {
 				.withArchival(new ArchiveEnabledFileSource.ZipCompression())//
 				.withArchival(new ArchiveEnabledFileSource.GZipCompression())//
 				.withArchival(new ArchiveEnabledFileSource.TarArchival())//
-		;
+				;
 		ObservableFile workingDir = args.length == 1 ? ObservableFile.observe(BetterFile.at(fileSource, args[0])) : null;
 		BetterFileBrowser browser = new BetterFileBrowser(fileSource, workingDir);
 		ObservableSwingUtils.systemLandF();
 		WindowPopulation.populateWindow(null, null, true, true)//
-				.withContent(browser)//
-				.withTitle(browser.getFile().map(f -> f == null ? "Computer" : f.getPath()))//
-				.withSize(800, 1000)//
-				.run(null);
+		.withContent(browser)//
+		.withTitle(browser.getFile().map(f -> f == null ? "Computer" : f.getPath()))//
+		.withSize(800, 1000)//
+		.run(null);
 	}
 }

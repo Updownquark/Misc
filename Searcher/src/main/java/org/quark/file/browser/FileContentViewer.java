@@ -4,13 +4,7 @@ import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.geom.Rectangle2D;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -57,50 +51,51 @@ public class FileContentViewer extends JPanel {
 
 	public FileContentViewer(ObservableValue<ObservableFile> file) {
 		theFile = file;
-		theStart = SettableValue.build(long.class).withValue(0L).build()//
-			.filterAccept(start -> start < 0 ? "Negative position not acceptable" : null);
-		theEnd = SettableValue.build(long.class).withValue(0L).build();
-		theFileSize = SettableValue.build(long.class).withValue(0L).build();
-		canScrollBack = SettableValue.build(boolean.class).withValue(false).build();
-		canScrollForward = SettableValue.build(boolean.class).withValue(true).build();
-		theViewMode = SettableValue.build(String.class).withValue("Binary").build();
-		theViewText = SettableValue.build(String.class).withValue("Binary").build();
-		isReading = SettableValue.build(boolean.class).withValue(false).build();
+		theStart = SettableValue.<Long> build().withValue(0L).build()//
+				.filterAccept(start -> start < 0 ? "Negative position not acceptable" : null);
+		theEnd = SettableValue.<Long> build().withValue(0L).build();
+		theFileSize = SettableValue.<Long> build().withValue(0L).build();
+		canScrollBack = SettableValue.<Boolean> build().withValue(false).build();
+		canScrollForward = SettableValue.<Boolean> build().withValue(true).build();
+		theViewMode = SettableValue.<String> build().withValue("Binary").build();
+		theViewText = SettableValue.<String> build().withValue("Binary").build();
+		isReading = SettableValue.<Boolean> build().withValue(false).build();
 		theTextBuffer = new StringBuilder();
 		theScrollPositions = new LinkedList<>();
-		isSearching = SettableValue.build(String.class).withValue(null).build();
-		theSearch = SettableValue.build(String.class).withValue("").build().disableWith(isSearching);
+		isSearching = SettableValue.<String> build().withValue(null).build();
+		theSearch = SettableValue.<String> build().withValue("").build().disableWith(isSearching);
 
 		ObservableValue<String> reading = isReading.map(r -> r ? "Reading Data" : null);
 		PanelPopulation.populateVPanel(this, null)//
-			.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), topPanel -> {
-				topPanel//
-					.addButton("<<", this::scrollTop, btn -> btn.disableWith(canScrollBack.map(s -> s ? null : "At beginning"))//
-						.withTooltip("Scroll to the beginning of the file"))//
-					.addButton("<", this::scrollLeft, btn -> btn.disableWith(canScrollBack.map(s -> s ? null : "At beginning"))//
-						.withTooltip("Scroll one page back in the file"))//
-					.addTextField(null, theStart.disableWith(reading), Format.LONG, f -> f.modifyEditor(tf -> tf.withColumns(8)))//
-					.addLabel(null, " to ", null)//
-					.addLabel(null, theEnd, Format.LONG, null)//
-					.addLabel(null, " of ", null)//
-					.addLabel(null, theFileSize.map(sz -> sz < 0 ? Double.NaN : sz * 1.0), BetterFileBrowser.SIZE_FORMAT, null)//
-					.addButton(">", this::scrollRight,
-						btn -> btn.disableWith(canScrollForward.map(sf -> sf ? null : "At end")).disableWith(reading)//
-							.withTooltip("Scroll one page forward in the file"))//
-					.addButton(">>", this::scrollBottom,
-						btn -> btn.disableWith(canScrollForward.map(sf -> sf ? null : "At end")).disableWith(reading)//
-							.withTooltip("Scroll to the end of the file"))//
-					.addComboField(null, theViewMode.disableWith(reading), Arrays.asList("Binary", "UTF-8", "UTF-16", "Binary/UTF-8"), null)//
-					.addTextField(null, theSearch.disableWith(reading), Format.TEXT, f -> f.modifyEditor(tf -> tf.withColumns(10)))//
-					.addLabel(null, isSearching.map(s -> s == null ? "" : s), Format.TEXT, null)//
-				;
-			})//
-			.addTextArea(null, theViewText, Format.TEXT, ta -> ta.fill().fillV().modifyEditor(c -> {
-				c.setEditable(false);
-				theTextComponent = c;
-				Font font = new Font("Courier New", c.getFont().getStyle(), c.getFont().getSize());
-				c.setFont(font);
-			}))//
+		.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), topPanel -> {
+			topPanel//
+			.addButton("<<", this::scrollTop, btn -> btn.disableWith(canScrollBack.map(s -> s ? null : "At beginning"))//
+					.withTooltip("Scroll to the beginning of the file"))//
+			.addButton("<", this::scrollLeft, btn -> btn.disableWith(canScrollBack.map(s -> s ? null : "At beginning"))//
+					.withTooltip("Scroll one page back in the file"))//
+			.addTextField(null, theStart.disableWith(reading), Format.LONG, f -> f.modifyEditor(tf -> tf.withColumns(8)))//
+			.addLabel(null, " to ", null)//
+			.addLabel(null, theEnd, Format.LONG, null)//
+			.addLabel(null, " of ", null)//
+			.addLabel(null, theFileSize.map(sz -> sz < 0 ? Double.NaN : sz * 1.0), BetterFileBrowser.SIZE_FORMAT, null)//
+			.addButton(">", this::scrollRight,
+					btn -> btn.disableWith(canScrollForward.map(sf -> sf ? null : "At end")).disableWith(reading)//
+					.withTooltip("Scroll one page forward in the file"))//
+			.addButton(">>", this::scrollBottom,
+					btn -> btn.disableWith(canScrollForward.map(sf -> sf ? null : "At end")).disableWith(reading)//
+					.withTooltip("Scroll to the end of the file"))//
+			.addComboField(null, theViewMode.disableWith(reading),
+					Arrays.asList("Binary", "UTF-8", "UTF-16", "Binary/UTF-8"), null)//
+			.addTextField(null, theSearch.disableWith(reading), Format.TEXT, f -> f.modifyEditor(tf -> tf.withColumns(10)))//
+			.addLabel(null, isSearching.map(s -> s == null ? "" : s), Format.TEXT, null)//
+			;
+		})//
+		.addTextArea(null, theViewText, Format.TEXT, ta -> ta.fill().fillV().modifyEditor(c -> {
+			c.setEditable(false);
+			theTextComponent = c;
+			Font font = new Font("Courier New", c.getFont().getStyle(), c.getFont().getSize());
+			c.setFont(font);
+		}))//
 		;
 
 		boolean[] changing = new boolean[1];
@@ -164,17 +159,17 @@ public class FileContentViewer extends JPanel {
 							if (found != null) {
 								theStart.set(found[0], null);
 								JOptionPane.showMessageDialog(this, "\"" + evt.getNewValue() + "\" found at position " + found[1],
-									"Text found", JOptionPane.INFORMATION_MESSAGE);
+										"Text found", JOptionPane.INFORMATION_MESSAGE);
 							} else {
 								JOptionPane.showMessageDialog(this, "\"" + evt.getNewValue() + "\" not found", "Text not found",
-									JOptionPane.INFORMATION_MESSAGE);
+										JOptionPane.INFORMATION_MESSAGE);
 							}
 						});
 					} catch (IOException e) {
 						e.printStackTrace();
 						ObservableSwingUtils.onEQ(() -> {
 							JOptionPane.showMessageDialog(this, "Could not read file " + theFile.get(), "File Read Failure",
-								JOptionPane.ERROR_MESSAGE);
+									JOptionPane.ERROR_MESSAGE);
 						});
 					}
 				}
@@ -364,7 +359,7 @@ public class FileContentViewer extends JPanel {
 			e.printStackTrace();
 			ObservableSwingUtils.onEQ(() -> {
 				JOptionPane.showMessageDialog(this, "Could not read file " + file.getPath(), "File Read Failure",
-					JOptionPane.ERROR_MESSAGE);
+						JOptionPane.ERROR_MESSAGE);
 			});
 		}
 		theScrollPositions.add(lastLineStart);
@@ -410,7 +405,7 @@ public class FileContentViewer extends JPanel {
 					int newPercent = (int) (counting.getPosition() * 1000.0 / length);
 					EventQueue.invokeLater(() -> {
 						isSearching.set(new StringBuilder("Searching...").append(newPercent / 10).append('.').append(newPercent % 10)
-							.append('%').toString(), null);
+								.append('%').toString(), null);
 					});
 				}
 				if (c == '\n' || c == 0) {

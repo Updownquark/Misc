@@ -10,12 +10,7 @@ import java.io.Reader;
 import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,7 +27,6 @@ import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedSet;
 import org.observe.config.ObservableConfig;
 import org.observe.config.SyncValueSet;
-import org.observe.util.TypeTokens;
 import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
@@ -43,13 +37,8 @@ import org.qommons.StringUtils;
 import org.qommons.TimeUtils.DateElementType;
 import org.qommons.TimeUtils.RelativeInstantEvaluation;
 import org.qommons.collect.ElementId;
-import org.qommons.io.ArchiveEnabledFileSource;
-import org.qommons.io.BetterFile;
+import org.qommons.io.*;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
-import org.qommons.io.FileUtils;
-import org.qommons.io.Format;
-import org.qommons.io.NativeFileSource;
-import org.qommons.io.SpinnerFormat;
 import org.qommons.threading.QommonsTimer;
 
 public class SearcherUi extends JPanel {
@@ -96,11 +85,9 @@ public class SearcherUi extends JPanel {
 		SearchResultNode(SearchResultNode parent, BetterFile file) {
 			this.parent = parent;
 			this.file = file;
-			children = ObservableSortedSet
-					.build(SearchResultNode.class,
-							(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true))
-					.build();
-			textResults = ObservableCollection.build(TextResult.class).build();
+			children = ObservableSortedSet.<SearchResultNode> build(
+					(r1, r2) -> StringUtils.compareNumberTolerant(r1.file.getName(), r2.file.getName(), true, true)).build();
+			textResults = ObservableCollection.<TextResult> build().build();
 		}
 
 		SearchResultNode getChild(BetterFile child) {
@@ -200,44 +187,43 @@ public class SearcherUi extends JPanel {
 		BetterFile workingDirFile = BetterFile.at(theFileSource, workingDir);
 		theFileFormat = new BetterFile.FileFormat(theFileSource, workingDirFile, false);
 		theTestFileFormat = new BetterFile.FileFormat(theFileSource, theFileFormat.getWorkingDir(), true);
-		theStatus = SettableValue.build(SearchStatus.class).withValue(SearchStatus.Idle).build();
+		theStatus = SettableValue.<SearchStatus> build().withValue(SearchStatus.Idle).build();
 		ObservableValue<String> disable = theStatus.map(st -> st == SearchStatus.Idle ? null : "Cannot be modified during a search");
-		theSearchBase = config.asValue(BetterFile.class).at("root").withFormat(theFileFormat, theFileFormat::getWorkingDir)
-				.buildValue(null).disableWith(disable);
-		SettableValue<PatternConfig> fileNamePattern = config.asValue(PatternConfig.class).at("file-name").buildValue(null);
-		theFileNamePatternStr = fileNamePattern
-				.asFieldEditor(TypeTokens.get().STRING, PatternConfig::getPattern, PatternConfig::setPattern, null)
+		theSearchBase = config.asValue(BetterFile.class).at("root").withFormat(theFileFormat, theFileFormat::getWorkingDir).buildValue(null)
 				.disableWith(disable);
-		theFileNamePattern = fileNamePattern.asFieldEditor(TypeTokens.get().of(Pattern.class), //
+		SettableValue<PatternConfig> fileNamePattern = config.asValue(PatternConfig.class).at("file-name").buildValue(null);
+		theFileNamePatternStr = fileNamePattern.asFieldEditor(PatternConfig::getPattern, PatternConfig::setPattern, null)
+				.disableWith(disable);
+		theFileNamePattern = fileNamePattern.asFieldEditor(
 				pc -> pc.getPattern() == null ? null
 						: Pattern.compile(pc.getPattern(), pc.isCaseSensitive() ? 0 : Pattern.CASE_INSENSITIVE), //
-				(pc, patt) -> {
-					pc.setPattern(patt == null ? null : patt.pattern());
-					if (patt != null) {
-						pc.setCaseSensitive((patt.flags() & Pattern.CASE_INSENSITIVE) == 0);
-					}
-				}, null).disableWith(disable);
-		theFileCaseSensitive = fileNamePattern.asFieldEditor(TypeTokens.get().BOOLEAN, PatternConfig::isCaseSensitive,
-				PatternConfig::setCaseSensitive, null).disableWith(disable);
+						(pc, patt) -> {
+							pc.setPattern(patt == null ? null : patt.pattern());
+							if (patt != null) {
+								pc.setCaseSensitive((patt.flags() & Pattern.CASE_INSENSITIVE) == 0);
+							}
+						}, null).disableWith(disable);
+		theFileCaseSensitive = fileNamePattern.asFieldEditor(PatternConfig::isCaseSensitive, PatternConfig::setCaseSensitive, null)
+				.disableWith(disable);
 		theFileNameTest = config.asValue(BetterFile.class).at("file-name/test")
 				.withFormat(theTestFileFormat, theTestFileFormat::getWorkingDir).buildValue(null);
 		isFollowingSymbolicLinks = config.asValue(boolean.class).at("follow-sym-links").withFormat(Format.BOOLEAN, () -> true)
 				.buildValue(null).disableWith(disable);
 		SettableValue<PatternConfig> fileContentPattern = config.asValue(PatternConfig.class).at("file-content").buildValue(null);
-		theFileContentPatternStr = fileContentPattern.asFieldEditor(TypeTokens.get().STRING, PatternConfig::getPattern,
-				PatternConfig::setPattern, null).disableWith(disable);
+		theFileContentPatternStr = fileContentPattern.asFieldEditor(PatternConfig::getPattern, PatternConfig::setPattern, null)
+				.disableWith(disable);
 		int fcFlags = Pattern.MULTILINE;
-		theFileContentPattern = fileContentPattern.asFieldEditor(TypeTokens.get().of(Pattern.class), //
+		theFileContentPattern = fileContentPattern.asFieldEditor(
 				pc -> pc.getPattern() == null ? null
 						: Pattern.compile(pc.getPattern(), fcFlags | (pc.isCaseSensitive() ? 0 : Pattern.CASE_INSENSITIVE)), //
-				(pc, patt) -> {
-					pc.setPattern(patt == null ? null : patt.pattern());
-					if (patt != null) {
-						pc.setCaseSensitive((patt.flags() & Pattern.CASE_INSENSITIVE) == 0);
-					}
-				}, null).disableWith(disable);
-		theContentCaseSensitive = fileContentPattern.asFieldEditor(TypeTokens.get().BOOLEAN, PatternConfig::isCaseSensitive,
-				PatternConfig::setCaseSensitive, null).disableWith(disable);
+						(pc, patt) -> {
+							pc.setPattern(patt == null ? null : patt.pattern());
+							if (patt != null) {
+								pc.setCaseSensitive((patt.flags() & Pattern.CASE_INSENSITIVE) == 0);
+							}
+						}, null).disableWith(disable);
+		theContentCaseSensitive = fileContentPattern.asFieldEditor(PatternConfig::isCaseSensitive, PatternConfig::setCaseSensitive, null)
+				.disableWith(disable);
 		theMaxFileMatchLength = config.asValue(int.class).at("file-content/max-length").withFormat(Format.INT, () -> 10000).buildValue(null)
 				.disableWith(disable);
 		theContentTest = config.asValue(String.class).at("file-content/test").withFormat(Format.TEXT, () -> null).buildValue(null);
@@ -245,24 +231,23 @@ public class SearcherUi extends JPanel {
 				.withFormat(Format.BOOLEAN, () -> false).buildValue(null).disableWith(disable);
 		theZipLevel = config.asValue(int.class).at("zip-level").withFormat(Format.INT, () -> 10).buildValue(null);
 		theZipLevel.changes().act(evt -> theFileSource.setMaxArchiveDepth(evt.getNewValue()));
-		theDirectoryRequirement=config.asValue(FileAttributeRequirement.class).at("directory").buildValue(null);
+		theDirectoryRequirement = config.asValue(FileAttributeRequirement.class).at("directory").buildValue(null);
 		SyncValueSet<FileAttributeMapEntry> attrCollection = config.asValue(FileAttributeMapEntry.class).at("file-attributes")
 				.asEntity(null).buildEntitySet(null);
 		theBooleanAttributes = attrCollection.getValues().flow()
-				.groupBy(//
-						flow -> flow.map(FileBooleanAttribute.class, FileAttributeMapEntry::getAttribute).distinct(), //
+				.groupByFlow(flow -> flow.map(FileAttributeMapEntry::getAttribute).distinct(), //
 						(att, fame) -> fame)//
-				.withValues(values -> values.transform(FileAttributeRequirement.class,
-						tx -> tx.map(fame -> fame == null ? null : fame.getValue()).modifySource(//
+				.withValues(values -> values
+						.<FileAttributeRequirement> transform(tx -> tx.map(fame -> fame == null ? null : fame.getValue()).modifySource(//
 								(fame2, req) -> fame2.setValue(req))))//
 				.gatherActive(null).singleMap(false);
 		for (FileBooleanAttribute att : FileBooleanAttribute.values()) {
 			FileAttributeRequirement req = theBooleanAttributes.get(att);
 			if (req == null) {
 				attrCollection.create()//
-						.with(FileAttributeMapEntry::getAttribute, att)//
-						.with(FileAttributeMapEntry::getValue, FileAttributeRequirement.Maybe)//
-						.create();
+				.with(FileAttributeMapEntry::getAttribute, att)//
+				.with(FileAttributeMapEntry::getValue, FileAttributeRequirement.Maybe)//
+				.create();
 			}
 		}
 
@@ -274,19 +259,19 @@ public class SearcherUi extends JPanel {
 		// Doesn't seem like a good idea to remember these values in config.
 		// A user just popping up the app and doing a search could inadvertently be excluding files on these criteria
 		// just because they forgot to reset them.
-		theMinSize = SettableValue.build(long.class).withValue(0L).build();
-		theMaxSize = SettableValue.build(long.class).withValue(1024L * 1024 * 1024 * 1024 * 1024).build(); // 1 Petabyte
+		theMinSize = SettableValue.<Long> build().withValue(0L).build();
+		theMaxSize = SettableValue.<Long> build().withValue(1024L * 1024 * 1024 * 1024 * 1024).build(); // 1 Petabyte
 		Calendar cal = Calendar.getInstance();
 		cal.set(cal.get(Calendar.YEAR) + 100, 1, 1, 0, 0, 0);
-		theMaxTime = SettableValue.build(long.class).withValue(cal.getTimeInMillis()).build();
+		theMaxTime = SettableValue.<Long> build().withValue(cal.getTimeInMillis()).build();
 		cal.set(1900, 1, 1, 0, 0);
-		theMinTime = SettableValue.build(long.class).withValue(cal.getTimeInMillis()).build();
+		theMinTime = SettableValue.<Long> build().withValue(cal.getTimeInMillis()).build();
 
-		theResults = SettableValue.build(SearchResultNode.class).build();
-		theSelectedResult = SettableValue.build(SearchResultNode.class).build();
+		theResults = SettableValue.<SearchResultNode> build().build();
+		theSelectedResult = SettableValue.<SearchResultNode> build().build();
 		theResults.noInitChanges().act(evt -> theSelectedResult.set(null, evt));
-		theSelectedTextResult = SettableValue.build(TextResult.class).build();
-		theStatusMessage = SettableValue.build(String.class).build();
+		theSelectedTextResult = SettableValue.<TextResult> build().build();
+		theStatusMessage = SettableValue.<String> build().build();
 		theStatusMessage.set(getIdleStatus(), null);
 		theSelectedRenderedText = theSelectedTextResult.map(tr -> tr == null ? "" : renderTextResult(tr));
 
@@ -495,8 +480,8 @@ public class SearcherUi extends JPanel {
 	}
 
 	void doSearch(BetterFile file, Pattern filePattern, Pattern contentPattern, boolean searchMultiContent, //
-		SettableValue<FileAttributeRequirement> directory, Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts,
-		Supplier<SearchResultNode> nodeGetter, StringBuilder pathSeq, FileContentSeq contentSeq, boolean hasMatch, int[] searched) {
+			SettableValue<FileAttributeRequirement> directory, Map<FileBooleanAttribute, FileAttributeRequirement> booleanAtts,
+			Supplier<SearchResultNode> nodeGetter, StringBuilder pathSeq, FileContentSeq contentSeq, boolean hasMatch, int[] searched) {
 		if (isCanceling) {
 			return;
 		}
@@ -675,11 +660,11 @@ public class SearcherUi extends JPanel {
 
 	private void initComponents() {
 		PanelPopulation.populateVPanel(this, null)//
-				.addSplit(false, mainSplit -> mainSplit.fill().fillV().withSplitProportion(.4)//
-						.firstV(this::populateConfigPanel)//
-						.lastV(resultPane -> resultPane.addSplit(true, resultSplit -> resultSplit.fill().fillV().withSplitProportion(.5)//
-								.firstV(this::populateResultFiles).lastV(this::populateResultContent))//
-				)).addLabel("Status:", theStatusMessage, Format.TEXT, f -> f.withFieldName(theStatus.map(s -> s.name() + ":")));
+		.addSplit(false, mainSplit -> mainSplit.fill().fillV().withSplitProportion(.4)//
+				.firstV(this::populateConfigPanel)//
+				.lastV(resultPane -> resultPane.addSplit(true, resultSplit -> resultSplit.fill().fillV().withSplitProportion(.5)//
+						.firstV(this::populateResultFiles).lastV(this::populateResultContent))//
+						)).addLabel("Status:", theStatusMessage, Format.TEXT, f -> f.withFieldName(theStatus.map(s -> s.name() + ":")));
 	}
 
 	private void populateConfigPanel(PanelPopulation.PanelPopulator<?, ?> configPanel) {
@@ -688,8 +673,8 @@ public class SearcherUi extends JPanel {
 		Format.SuperDoubleFormatBuilder sizeFormatBuilder = Format.doubleFormat(4).withUnit("b", true);
 		double k = 1024;
 		sizeFormatBuilder.withPrefix("k", k).withPrefix("M", k * k).withPrefix("G", k * k * k).withPrefix("T", k * k * k * k)//
-				.withPrefix("P", k * k * k * k * k).withPrefix("E", k * k * k * k * k * k).withPrefix("Z", k * k * k * k * k * k * k)
-				.withPrefix("Y", k * k * k * k * k * k * k * k);
+		.withPrefix("P", k * k * k * k * k).withPrefix("E", k * k * k * k * k * k).withPrefix("Z", k * k * k * k * k * k * k)
+		.withPrefix("Y", k * k * k * k * k * k * k * k);
 		Format<Double> sizeFormat = sizeFormatBuilder.build();
 		SettableValue<Long> minTime = theMinTime.filterAccept(t -> {
 			if (t > theMaxTime.get()) {
@@ -722,137 +707,130 @@ public class SearcherUi extends JPanel {
 			return null;
 		});
 
-		configPanel
-				.addHPanel("Search In:", "box",
-						rootPanel -> rootPanel.fill()//
-								.addTextField(null, theSearchBase, theFileFormat, tf -> tf.fill())//
-								.addFileField(null, theSearchBase.map(FileUtils::asFile, f -> BetterFile.at(theFileSource, f.getPath())),
-										true, null))//
-				.spacer(3)
-				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
-						p -> p.addLabel(null, ObservableValue.of("----File Name----"), Format.TEXT, x -> x.fill()))//
-				.addHPanel("File Pattern:", "box",
-						fpPanel -> fpPanel.fill()//
-								.addTextField(null, theFileNamePatternStr, PATTERN_FORMAT,
-										tf -> tf.fill().withTooltip("The regular expression to match file names (and paths) with"))//
-								.addCheckField("Case:",
-										theFileCaseSensitive
-												.disableWith(theFileNamePattern.map(p -> p == null ? "No file pattern set" : null)),
-										ck -> ck.withTooltip("Whether the file pattern should be evaluated case-sensitively")))//
-				.addHPanel("Test File:", "box",
-						rootPanel -> rootPanel.fill()//
-								.addTextField(null,
-										theFileNameTest
-												.refresh(//
-														Observable.or(theSearchBase.noInitChanges(), theFileNamePattern.noInitChanges()))//
-												.disableWith(theFileNamePattern.map(p -> p == null ? "No file pattern set" : null)), //
-										theTestFileFormat,
-										tf -> tf.fill().modifyEditor(tf2 -> tf2.withWarning(this::testFileName)))//
-								.addFileField(null, theFileNameTest.map(FileUtils::asFile, f -> BetterFile.at(theFileSource, f.getPath())),
-										true, null))//
-				.spacer(3)
-				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
-						p -> p.addLabel(null, ObservableValue.of("----File Content----"), Format.TEXT, x -> x.fill()))//
-				.addHPanel("Text Pattern:", "box",
-						cpPanel -> cpPanel.fill()//
-								.addTextField(null, theFileContentPatternStr, PATTERN_FORMAT,
-										tf -> tf.fill().withTooltip("The regular expression to match file content with"))//
-								.addCheckField("Case:",
-										theContentCaseSensitive
-												.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null)),
-										ck -> ck.withTooltip("Whether the content pattern should be evaluated case-sensitively")))//
-				.addTextField("Test Content:",
-						theContentTest
-								.refresh(//
-										theFileContentPattern.noInitChanges())//
-								.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null))//
-								.map(v -> v == null ? "" : v, v -> v),
-						Format.TEXT, tf -> tf.fill().modifyEditor(tf2 -> tf2.withWarning(this::testFileContent)))//
-				.addCheckField("Multiple Text Matches:",
-						isSearchingMultipleContentMatches
-								.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null)),
-						null)//
-				.spacer(3)
-				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
-						p -> p.addLabel(null, ObservableValue.of("----Excluded File Names---"), Format.TEXT, x -> x.fill()))//
-				.addTable(theExclusionPatterns.getValues(), exclTable -> {
-					exclTable.withColumn("Pattern", String.class, PatternConfig::getPattern,
-							c -> c.withWidths(100, 150, 500).withMutation(m -> m.asText(PATTERN_FORMAT)));
-					exclTable.withColumn("Case", boolean.class, PatternConfig::isCaseSensitive,
-							c -> c.withHeaderTooltip("Case-sensitive")
-									.withRenderer(ObservableCellRenderer.checkRenderer(cell -> cell.getCellValue()))
-									.withMutation(m -> m.asCheck()));
-					exclTable.withAdd(() -> theExclusionPatterns.create().create().get(), null);
-					exclTable.withRemove(null, null);
-				})//
-				.spacer(3)
-				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
-						p -> p.addLabel(null, ObservableValue.of("----File Metadata----"), Format.TEXT, x -> x.fill()))//
-				.addTextField("Max Zip Depth:", theZipLevel, SpinnerFormat.INT, tf -> tf.fill())//
-				.addRadioField("Directory:", theDirectoryRequirement, FileAttributeRequirement.values(), null)//
-				.addRadioField("Readable:", theBooleanAttributes.observe(FileBooleanAttribute.Readable),
-						FileAttributeRequirement.values(), null)//
-				.addRadioField("Writable:", theBooleanAttributes.observe(FileBooleanAttribute.Writable),
-						FileAttributeRequirement.values(), null)//
-				.addRadioField("Hidden:", theBooleanAttributes.observe(FileBooleanAttribute.Hidden),
-						FileAttributeRequirement.values(), null)//
-				.addHPanel("Size:", new JustifiedBoxLayout(false).mainJustified(), p -> p.fill()//
-						.addTextField(null, minSize.map(s -> s * 1.0, s -> s.longValue()), sizeFormat, f -> f.fill())//
-						.addLabel(null, "...", null)//
-						.addTextField(null, maxSize.map(s -> s * 1.0, s -> s.longValue()), sizeFormat, f -> f.fill())//
+		configPanel.addHPanel("Search In:", "box", rootPanel -> rootPanel.fill()//
+				.addTextField(null, theSearchBase, theFileFormat, tf -> tf.fill())//
+				.addFileField(null, theSearchBase.transformReversible(tx -> tx//
+						.map(FileUtils::asFile)//
+						.replaceSource(f -> BetterFile.at(theFileSource, f.getPath()), null)), true, null))//
+		.spacer(3)
+		.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
+				p -> p.addLabel(null, ObservableValue.of("----File Name----"), Format.TEXT, x -> x.fill()))//
+		.addHPanel("File Pattern:", "box", fpPanel -> fpPanel.fill()//
+				.addTextField(null, theFileNamePatternStr, PATTERN_FORMAT,
+						tf -> tf.fill().withTooltip("The regular expression to match file names (and paths) with"))//
+				.addCheckField("Case:",
+						theFileCaseSensitive.disableWith(theFileNamePattern.map(p -> p == null ? "No file pattern set" : null)),
+						ck -> ck.withTooltip("Whether the file pattern should be evaluated case-sensitively")))//
+		.addHPanel("Test File:", "box", rootPanel -> rootPanel.fill()//
+				.addTextField(null, theFileNameTest.refresh(//
+						Observable.or(theSearchBase.noInitChanges(), theFileNamePattern.noInitChanges()))//
+						.disableWith(theFileNamePattern.map(p -> p == null ? "No file pattern set" : null)), //
+						theTestFileFormat, tf -> tf.fill().modifyEditor(tf2 -> tf2.withWarning(this::testFileName)))//
+				.addFileField(null, theFileNameTest.transformReversible(tx -> tx//
+						.map(FileUtils::asFile)//
+						.replaceSource(f -> BetterFile.at(theFileSource, f.getPath()), null)), true, null))//
+		.spacer(3)
+		.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
+				p -> p.addLabel(null, ObservableValue.of("----File Content----"), Format.TEXT, x -> x.fill()))//
+		.addHPanel("Text Pattern:", "box", cpPanel -> cpPanel.fill()//
+				.addTextField(null, theFileContentPatternStr, PATTERN_FORMAT,
+						tf -> tf.fill().withTooltip("The regular expression to match file content with"))//
+				.addCheckField("Case:",
+						theContentCaseSensitive
+						.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null)),
+						ck -> ck.withTooltip("Whether the content pattern should be evaluated case-sensitively")))//
+		.addTextField("Test Content:", theContentTest.refresh(//
+				theFileContentPattern.noInitChanges())//
+				.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null))//
+				.map(v -> v == null ? "" : v, v -> v), Format.TEXT,
+				tf -> tf.fill().modifyEditor(tf2 -> tf2.withWarning(this::testFileContent)))//
+		.addCheckField("Multiple Text Matches:",
+				isSearchingMultipleContentMatches
+				.disableWith(theFileContentPattern.map(p -> p == null ? "No content pattern set" : null)),
+				null)//
+		.spacer(3)
+		.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
+				p -> p.addLabel(null, ObservableValue.of("----Excluded File Names---"), Format.TEXT, x -> x.fill()))//
+		.addTable(theExclusionPatterns.getValues(), exclTable -> {
+			exclTable.withColumn("Pattern", String.class, PatternConfig::getPattern,
+					c -> c.withWidths(100, 150, 500).withMutation(m -> m.asText(PATTERN_FORMAT)));
+			exclTable.withColumn("Case", boolean.class, PatternConfig::isCaseSensitive,
+					c -> c.withHeaderTooltip("Case-sensitive")
+					.withRenderer(ObservableCellRenderer.checkRenderer(cell -> cell.getCellValue()))
+					.withMutation(m -> m.asCheck()));
+			exclTable.withAdd(() -> theExclusionPatterns.create().create().get(), null);
+			exclTable.withRemove(null, null);
+		})//
+		.spacer(3)
+		.addHPanel(null, new JustifiedBoxLayout(false).mainCenter(),
+				p -> p.addLabel(null, ObservableValue.of("----File Metadata----"), Format.TEXT, x -> x.fill()))//
+		.addTextField("Max Zip Depth:", theZipLevel, SpinnerFormat.INT, tf -> tf.fill())//
+		.addRadioField("Directory:", theDirectoryRequirement, FileAttributeRequirement.values(), null)//
+		.addRadioField("Readable:", theBooleanAttributes.observe(FileBooleanAttribute.Readable), FileAttributeRequirement.values(),
+				null)//
+		.addRadioField("Writable:", theBooleanAttributes.observe(FileBooleanAttribute.Writable), FileAttributeRequirement.values(),
+				null)//
+		.addRadioField("Hidden:", theBooleanAttributes.observe(FileBooleanAttribute.Hidden), FileAttributeRequirement.values(),
+				null)//
+		.addHPanel("Size:", new JustifiedBoxLayout(false).mainJustified(), p -> p.fill()//
+				.addTextField(null, minSize.transformReversible(tx -> tx//
+						.map(s -> s * 1.0)//
+						.replaceSource(s -> s.longValue(), null)), sizeFormat, f -> f.fill())//
+				.addLabel(null, "...", null)//
+				.addTextField(null, maxSize.transformReversible(tx -> tx//
+						.map(s -> s * 1.0)//
+						.replaceSource(s -> s.longValue(), null)), sizeFormat, f -> f.fill())//
 				)//
-				.addHPanel("Last Modified:", new JustifiedBoxLayout(false).mainJustified(), p -> p.fill()//
-						.addTextField(null, minTime.map(Instant::ofEpochMilli, Instant::toEpochMilli), dateFormat, f -> f.fill())//
-						.addLabel(null, "...", null)//
-						.addTextField(null, maxTime.map(Instant::ofEpochMilli, Instant::toEpochMilli), dateFormat, f -> f.fill())//
+		.addHPanel("Last Modified:", new JustifiedBoxLayout(false).mainJustified(), p -> p.fill()//
+				.addTextField(null, minTime.map(Instant::ofEpochMilli, Instant::toEpochMilli), dateFormat, f -> f.fill())//
+				.addLabel(null, "...", null)//
+				.addTextField(null, maxTime.map(Instant::ofEpochMilli, Instant::toEpochMilli), dateFormat, f -> f.fill())//
 				)//
-				.addButton("Search", __ -> {
-					SearchStatus status = theStatus.get();
-					switch (status) {
-					case Idle:
-						theStatus.set(SearchStatus.Searching, null);
-						theStatusMessage.set("Beginning search...", null);
-						theStatusUpdateHandle.setActive(true);
-						QommonsTimer.getCommonInstance().offload(this::doSearch);
-						break;
+		.addButton("Search", __ -> {
+			SearchStatus status = theStatus.get();
+			switch (status) {
+			case Idle:
+				theStatus.set(SearchStatus.Searching, null);
+				theStatusMessage.set("Beginning search...", null);
+				theStatusUpdateHandle.setActive(true);
+				QommonsTimer.getCommonInstance().offload(this::doSearch);
+				break;
+			case Searching:
+				isCanceling = true;
+				theStatus.set(SearchStatus.Canceling, null);
+				break;
+			case Canceling:
+				break;
+			}
+		}, b -> b.disableWith(theStatus.map(s -> s == SearchStatus.Canceling ? "Canceling Search" : null))//
+				.withText(theStatus.map(st -> {
+					switch (st) {
 					case Searching:
-						isCanceling = true;
-						theStatus.set(SearchStatus.Canceling, null);
-						break;
+						return "Cancel";
 					case Canceling:
-						break;
+						return "Canceling";
+					default:
+						return "Search";
 					}
-				}, b -> b.disableWith(theStatus.map(s -> s == SearchStatus.Canceling ? "Canceling Search" : null))//
-						.withText(theStatus.map(st -> {
-							switch (st) {
-							case Searching:
-								return "Cancel";
-							case Canceling:
-								return "Canceling";
-							default:
-								return "Search";
-							}
-						})))
+				})))
 		// TODO Size, last modified
 		;
 	}
 
 	private void populateResultFiles(PanelPopulation.PanelPopulator<?, ?> configPanel) {
-		configPanel.addTree(theResults, node -> node.children,
-				tree -> tree.fill().fillV().withValueSelection(theSelectedResult, true)//
-						.withRender(render -> render.formatText(node -> node.file.getName()))//
-						.withLeafTest(node -> !node.file.isDirectory())//
-						.onClick(evt -> {
-							if (evt.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(evt) && Desktop.isDesktopSupported()) {
-								try {
-									Desktop.getDesktop().open(new File(theSelectedResult.get().file.getPath()));
-								} catch (IOException e) {
-									e.printStackTrace();
-									configPanel.alert("Could Not Open File",
-											"Error occurred opening " + theSelectedResult.get().file.getPath());
-								}
-							}
-						}));
+		configPanel.addTree(theResults, node -> node.children, tree -> tree.fill().fillV().withValueSelection(theSelectedResult, true)//
+				.withRender(render -> render.formatText(node -> node.file.getName()))//
+				.withLeafTest(node -> !node.file.isDirectory())//
+				.onClick(evt -> {
+					if (evt.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(evt) && Desktop.isDesktopSupported()) {
+						try {
+							Desktop.getDesktop().open(new File(theSelectedResult.get().file.getPath()));
+						} catch (IOException e) {
+							e.printStackTrace();
+							configPanel.alert("Could Not Open File", "Error occurred opening " + theSelectedResult.get().file.getPath());
+						}
+					}
+				}));
 	}
 
 	private void populateResultContent(PanelPopulation.PanelPopulator<?, ?> configPanel) {
@@ -860,13 +838,13 @@ public class SearcherUi extends JPanel {
 				.firstV(split1 -> split1.addTable(
 						ObservableCollection.flattenValue(theSelectedResult.map(result -> result == null ? null : result.textResults)),
 						list -> list.fill().visibleWhen(theFileContentPattern.map(p -> p != null))
-								.withSelection(theSelectedTextResult, true)//
-								.withColumn("Value", String.class, tr -> tr.value, c -> c.withWidths(100, 250, 1000))//
-								.withColumn("Pos", long.class, tr -> tr.position, c -> c.withWidths(30, 50, 100))//
-								.withColumn("Line", long.class, tr -> tr.lineNumber + 1, c -> c.withWidths(30, 50, 100))//
-								.withColumn("Col", long.class, tr -> tr.columnNumber + 1, c -> c.withWidths(30, 50, 100))//
-				)//
-				)//
+						.withSelection(theSelectedTextResult, true)//
+						.withColumn("Value", String.class, tr -> tr.value, c -> c.withWidths(100, 250, 1000))//
+						.withColumn("Pos", long.class, tr -> tr.position, c -> c.withWidths(30, 50, 100))//
+						.withColumn("Line", long.class, tr -> tr.lineNumber + 1, c -> c.withWidths(30, 50, 100))//
+						.withColumn("Col", long.class, tr -> tr.columnNumber + 1, c -> c.withWidths(30, 50, 100))//
+						)//
+						)//
 				.lastV(split2 -> split2.addTextArea(null, SettableValue.asSettable(theSelectedRenderedText, __ -> null), Format.TEXT,
 						tf -> tf.fill().fillV().modifyEditor(tf2 -> tf2.asHtml(true).setEditable(false)))))//
 		;
@@ -876,10 +854,10 @@ public class SearcherUi extends JPanel {
 		String workingDir = System.getProperty("user.dir");
 		EventQueue.invokeLater(() -> {
 			ObservableSwingUtils.buildUI()//
-				.withConfig("qommons-search")//
-				.withTitle("Qommons Search")//
-				.systemLandF()//
-				.build(config -> new SearcherUi(config, workingDir));
+			.withConfig("qommons-search")//
+			.withTitle("Qommons Search")//
+			.systemLandF()//
+			.build(config -> new SearcherUi(config, workingDir));
 		});
 	}
 }

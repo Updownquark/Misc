@@ -77,20 +77,20 @@ public class Finance extends JPanel {
 			this.plan = plan;
 
 			variablesById = plan.getVariables().getValues().flow()//
-					.groupBy(Long.class, PlanVariable::getId, null)//
+					.groupBy(PlanVariable::getId, null)//
 					.gather()//
 					.singleMap(true);
 			fundsById = plan.getFunds().getValues().flow()//
-					.groupBy(Long.class, Fund::getId, null)//
+					.groupBy(Fund::getId, null)//
 					.gather()//
 					.singleMap(true);
 
 			variablesByName = plan.getVariables().getValues().flow()//
-					.groupBy(String.class, PlanVariable::getName, null)//
+					.groupBy(PlanVariable::getName, null)//
 					.gather()//
 					.singleMap(true);
 			fundsByName = plan.getFunds().getValues().flow()//
-					.groupBy(String.class, Fund::getName, null)//
+					.groupBy(Fund::getName, null)//
 					.gather()//
 					.singleMap(true);
 		}
@@ -146,7 +146,8 @@ public class Finance extends JPanel {
 		formatSet.withFormat(TypeTokens.get().of(ObservableExpression.class), new ObservableConfigFormat<ObservableExpression>() {
 			@Override
 			public boolean format(ObservableConfigParseSession session, ObservableExpression value, ObservableExpression previousValue,
-					ConfigGetter config2, Consumer<ObservableExpression> acceptedValue, Observable<?> until) throws IllegalArgumentException {
+					ConfigGetter config2, Consumer<ObservableExpression> acceptedValue, Observable<?> until)
+							throws IllegalArgumentException {
 				if (value != null) {
 					ObservableConfig cfg = config2.getConfig(true, false);
 					Process process = getProcess(cfg, configSession);
@@ -214,13 +215,15 @@ public class Finance extends JPanel {
 		TypeToken<ObservableCollection<AssetGroup>> groupCollType = TypeTokens.get().keyFor(ObservableCollection.class)
 				.<ObservableCollection<AssetGroup>> parameterized(AssetGroup.class);
 		formatSet.buildEntityFormat(TypeTokens.get().of(Fund.class), efb -> efb//
-				.withFieldFormat(Fund::getMemberships, ObservableConfigFormat.ofCollection(groupCollType, groupRefFormat, "groups", "group"))//
+				.withFieldFormat(Fund::getMemberships,
+						ObservableConfigFormat.ofCollection(groupCollType, groupRefFormat, "groups", "group"))//
 				);
 		formatSet.buildEntityFormat(TypeTokens.get().of(ProcessAction.class), efb -> efb//
 				.withFieldFormat(ProcessAction::getFund, fundRefFormat)//
 				);
 		formatSet.buildEntityFormat(TypeTokens.get().of(Process.class), efb -> efb//
-				.withFieldFormat(Process::getMemberships, ObservableConfigFormat.ofCollection(groupCollType, groupRefFormat, "groups", "group"))//
+				.withFieldFormat(Process::getMemberships,
+						ObservableConfigFormat.ofCollection(groupCollType, groupRefFormat, "groups", "group"))//
 				);
 
 		SimpleObservable<Void> builtNotifier = new SimpleObservable<>();
@@ -232,8 +235,8 @@ public class Finance extends JPanel {
 				.buildEntitySet(null);
 		// Replace all expressions
 		thePlanData = thePlans.getValues().flow()//
-				.groupBy(Long.class, Plan::getId, null)//
-				.withValues(values -> values.transform(PlanData.class, tx -> tx.cache(true).reEvalOnUpdate(false).map(PlanData::new)))//
+				.groupBy(Plan::getId, null)//
+				.withValues(values -> values.<PlanData> transform(tx -> tx.cache(true).reEvalOnUpdate(false).map(PlanData::new)))//
 				.gather()//
 				.singleMap(true);
 		ready[0] = true;
@@ -281,8 +284,8 @@ public class Finance extends JPanel {
 						try {
 							vbl.setValue(vbl.getValue().replaceAll(exp -> replacePlanComponents(exp, plan, process, false)));
 						} catch (RuntimeException e) {
-							System.err.println(
-									plan.getName() + " process " + process.getName() + "  variable " + vbl.getName() + ": " + e.getMessage());
+							System.err.println(plan.getName() + " process " + process.getName() + "  variable " + vbl.getName() + ": "
+									+ e.getMessage());
 							e.printStackTrace();
 						}
 					}
@@ -328,8 +331,8 @@ public class Finance extends JPanel {
 				return p1.getGoalDate().compareTo(p2.getGoalDate());
 			}
 		}, null, Ternian.TRUE).map(p -> p == null ? null : p.getGoalDate());
-		theStart = SettableValue.build(Instant.class).withValue(minStart.get()).build();
-		theEnd = SettableValue.build(Instant.class).withValue(maxEnd.get()).build();
+		theStart = SettableValue.<Instant> build().withValue(minStart.get()).build();
+		theEnd = SettableValue.<Instant> build().withValue(maxEnd.get()).build();
 		minStart.noInitChanges().act(evt -> {
 			if (!Objects.equals(evt.getOldValue(), evt.getNewValue())) {
 				theStart.set(evt.getNewValue(), evt);
@@ -340,7 +343,7 @@ public class Finance extends JPanel {
 				theEnd.set(evt.getNewValue(), evt);
 			}
 		});
-		theResolution = SettableValue.build(ParsedDuration.class).withValue(TimeUtils.flexDuration(1, DurationComponentType.Month)).build();
+		theResolution = SettableValue.<ParsedDuration> build().withValue(TimeUtils.flexDuration(1, DurationComponentType.Month)).build();
 
 		NonStructuredParser moneyParser = new NonStructuredParser() {
 			@Override
@@ -459,39 +462,44 @@ public class Finance extends JPanel {
 		theSimResults = visiblePlans.flow()//
 				.refresh(Observable.or(theStart.noInitChanges(), theEnd.noInitChanges(), theResolution.noInitChanges())//
 						.filterMap(evt -> !Objects.equals(evt.getOldValue(), evt.getNewValue())))//
-				.transform(PlanSimulation.SimulationResults.class, tx -> tx.cache(true).reEvalOnUpdate(true)//
+				.<PlanSimulation.SimulationResults> transform(tx -> tx.cache(true).reEvalOnUpdate(true)//
 						.build((plan, txValues) -> simulate(plan, txValues.getPreviousResult())))//
 				.refreshEach(results -> results == null ? null : results.finished.noInitChanges())//
 				.collect();
 		theItemSimResults = theSimResults.flow()//
-				.flatMap(PlanItem.class, planRes -> ObservableCollection.flattenCollections(PlanItem.class, //
-						planRes == null ? null : countTo(planRes.funds.length).flow()//
-								.map(PlanItem.class,
-										fundIdx -> new PlanItem(planRes, planRes.funds[fundIdx], null, true, planRes.fundBalances[fundIdx]))//
+				.flatMap(planRes -> ObservableCollection.flattenCollections(//
+						planRes == null ? null
+								: countTo(planRes.funds.length).flow()//
+								.<PlanItem> map(fundIdx -> new PlanItem(planRes, planRes.funds[fundIdx], null, true,
+										planRes.fundBalances[fundIdx]))//
 								.collect(), //
-								planRes == null ? null : countTo(planRes.funds.length).flow()//
-										.flatMap(PlanItem.class, fundIdx -> countTo(planRes.processes.length).flow()//
-												.map(PlanItem.class, procIdx -> new PlanItem(planRes, planRes.funds[fundIdx], planRes.processes[procIdx], false,
-														planRes.fundProcessContributions[fundIdx][procIdx]))//
+								planRes == null ? null
+										: countTo(planRes.funds.length).flow()//
+										.<PlanItem> flatMap(fundIdx -> countTo(planRes.processes.length).flow()//
+												.<PlanItem> map(
+														procIdx -> new PlanItem(planRes, planRes.funds[fundIdx], planRes.processes[procIdx],
+																false, planRes.fundProcessContributions[fundIdx][procIdx]))//
 												)//
 										.collect(), //
-										planRes == null ? null : countTo(planRes.processes.length).flow()//
-												.map(PlanItem.class,
-														procIdx -> new PlanItem(planRes, planRes.processes[procIdx], null, false, planRes.processAmounts[procIdx]))//
+										planRes == null ? null
+												: countTo(planRes.processes.length).flow()//
+												.<PlanItem> map(procIdx -> new PlanItem(planRes, planRes.processes[procIdx], null, false,
+														planRes.processAmounts[procIdx]))//
 												.collect(), //
-												planRes == null ? null : countTo(planRes.processes.length).flow()//
-														.flatMap(PlanItem.class, procIdx -> countTo(planRes.processActions[procIdx].length).flow()//
-																.map(PlanItem.class, actionIdx -> new PlanItem(planRes, planRes.processes[procIdx],
-																		planRes.processActions[procIdx][actionIdx], false, planRes.processActionAmounts[procIdx][actionIdx]))//
+												planRes == null ? null
+														: countTo(planRes.processes.length).flow()//
+														.<PlanItem> flatMap(procIdx -> countTo(planRes.processActions[procIdx].length).flow()//
+																.<PlanItem> map(actionIdx -> new PlanItem(planRes, planRes.processes[procIdx],
+																		planRes.processActions[procIdx][actionIdx], false,
+																		planRes.processActionAmounts[procIdx][actionIdx]))//
 																)//
 														.collect()//
 						))//
 				.collect();
 
-		theTreeSelection = SettableValue.build((Class<BetterList<Object>>) (Class<?>) BetterList.class).build();
+		theTreeSelection = SettableValue.<BetterList<Object>> build().build();
 		initComponents();
 	}
-
 
 	PlanSimulation.SimulationResults simulate(Plan plan, SimulationResults previousResults) {
 		if (previousResults != null && !previousResults.finished.get()) {
@@ -526,7 +534,7 @@ public class Finance extends JPanel {
 		for (int i = 0; i < upTo; i++) {
 			array[i] = i;
 		}
-		return ObservableCollection.of(Integer.class, array);
+		return ObservableCollection.of(array);
 	}
 
 	public ObservableValueSet<Plan> getPlans() {
@@ -581,26 +589,33 @@ public class Finance extends JPanel {
 				.withSplitProportion(theConfig.asValue(double.class).at("main-vertical-split").buildValue(null))//
 				.firstH(new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 						p -> p.addSplit(false,
-								configSplit -> configSplit.withSplitProportion(theConfig.asValue(double.class).at("main-split").buildValue(null))//
-								.firstH(new JustifiedBoxLayout(true).mainJustified().crossJustified(), this::configurePlanTree)//
+								configSplit -> configSplit
+								.withSplitProportion(theConfig.asValue(double.class).at("main-split").buildValue(null))//
+								.firstH(new JustifiedBoxLayout(true).mainJustified().crossJustified(),
+										this::configurePlanTree)//
 								.lastH(new JustifiedBoxLayout(true).mainJustified().crossJustified(), p2 -> p2//
 										.addComponent(null, new PlanEditor(selectedPlan),
-												comp -> comp.fill().fillV().visibleWhen(selectedPlan.map(plan -> plan != null)))//
+												comp -> comp.fill().fillV()
+												.visibleWhen(selectedPlan.map(plan -> plan != null)))//
 										.addComponent(null, new VariableEditor(selectedVbl, this),
-												comp -> comp.fill().fillV().visibleWhen(selectedVbl.map(time -> time != null)))//
+												comp -> comp.fill().fillV()
+												.visibleWhen(selectedVbl.map(time -> time != null)))//
 										.addComponent(null, new FundEditor(selectedFund, this),
-												comp -> comp.fill().fillV().visibleWhen(selectedFund.map(fund -> fund != null)))//
+												comp -> comp.fill().fillV()
+												.visibleWhen(selectedFund.map(fund -> fund != null)))//
 										.addComponent(null, new ProcessEditor(selectedProcess, this),
-												comp -> comp.fill().fillV().visibleWhen(selectedProcess.map(process -> process != null)))//
-										.addComponent(null, new AssetGroupEditor(selectedGroup),
-												comp -> comp.fill().fillV().visibleWhen(selectedGroup.map(group -> group != null)))//
+												comp -> comp.fill().fillV()
+												.visibleWhen(selectedProcess.map(process -> process != null)))//
+										.addComponent(null, new AssetGroupEditor(selectedGroup), comp -> comp.fill().fillV()
+												.visibleWhen(selectedGroup.map(group -> group != null)))//
 										)//
 								))//
 				.lastH(new JustifiedBoxLayout(true).mainJustified().crossJustified(), p -> p//
 						.addHPanel(null, new JustifiedBoxLayout(false).mainJustified(), p3 -> p3.fill()//
 								.addTextField("Start:", theStart, SpinnerFormat.flexDate(theStart, "MMM dd, yyyy", null), null)//
 								.addTextField("End:", theEnd, SpinnerFormat.flexDate(theEnd, "MMM dd, yyyy", null), null)//
-								.addTextField("Resolution:", theResolution, SpinnerFormat.forAdjustable(TimeUtils::parseDuration), null)//
+								.addTextField("Resolution:", theResolution, SpinnerFormat.forAdjustable(TimeUtils::parseDuration),
+										null)//
 								).addTabs(tabs -> tabs//
 										.withHTab("balances", new JustifiedBoxLayout(true).mainJustified().crossJustified(), p3 -> p3//
 												.addComponent(null, new TimelinePanel(fundBalances, theStart, theEnd, false), null)//
@@ -694,7 +709,8 @@ public class Finance extends JPanel {
 						.decorate((cell, deco) -> {
 							if (cell.getCellValue() instanceof VisibleEntity) {
 								deco.withForeground(((VisibleEntity) cell.getCellValue()).isShown() ? Color.black : Color.lightGray);
-								if (cell.getCellValue() instanceof PlanComponent && ((PlanComponent) cell.getCellValue()).getError() != null) {
+								if (cell.getCellValue() instanceof PlanComponent
+										&& ((PlanComponent) cell.getCellValue()).getError() != null) {
 									deco.withLineBorder(Color.red, 1, false);
 								}
 							}
@@ -758,7 +774,8 @@ public class Finance extends JPanel {
 						case "Plans":
 							Plan newPlan = thePlans.create()//
 							.with(Plan::getName,
-									StringUtils.getNewItemName(thePlans.getValues(), Plan::getName, "New Plan", StringUtils.SIMPLE_DUPLICATES))//
+									StringUtils.getNewItemName(thePlans.getValues(), Plan::getName, "New Plan",
+											StringUtils.SIMPLE_DUPLICATES))//
 							.create().get();
 							EventQueue.invokeLater(() -> theTreeSelection.set(BetterList.of("Plans", newPlan), null));
 							break;
@@ -775,7 +792,8 @@ public class Finance extends JPanel {
 							plan = (Plan) path.get(1);
 							Fund fund = plan.getFunds().create()//
 									.with(Fund::getName,
-											StringUtils.getNewItemName(plan.getFunds().getValues(), Fund::getName, "fund", identifiedDuplicates))//
+											StringUtils.getNewItemName(plan.getFunds().getValues(), Fund::getName, "fund",
+													identifiedDuplicates))//
 									.create().get();
 							EventQueue.invokeLater(() -> theTreeSelection.set(BetterList.of("Plans", plan, "Funds", fund), null));
 							break;
@@ -815,9 +833,8 @@ public class Finance extends JPanel {
 						)//
 				.withAction(null, path -> {
 					if (path.getLast() instanceof Plan) {
-						if (!tree.alert("Delete Plan?",
-								"Are you sure you want to delete plan '" + ((Plan) path.getLast()).getName() + "'?" + "\nThis cannot be undone.")
-								.confirm(true)) {
+						if (!tree.alert("Delete Plan?", "Are you sure you want to delete plan '" + ((Plan) path.getLast()).getName() + "'?"
+								+ "\nThis cannot be undone.").confirm(true)) {
 							return;
 						}
 						thePlans.getValues().remove(path.getLast());
@@ -851,9 +868,8 @@ public class Finance extends JPanel {
 						group.getPlan().getGroups().getValues().remove(group);
 					}
 				}, action -> action.allowForEmpty(false).allowForMultiple(false)
-						.allowWhen(
-								path -> path.getLast() instanceof Plan || path.getLast() instanceof PlanComponent ? null : "Placeholder--cannot delete",
-										null)//
+						.allowWhen(path -> path.getLast() instanceof Plan || path.getLast() instanceof PlanComponent ? null
+								: "Placeholder--cannot delete", null)//
 						.displayAsButton(true).displayAsPopup(false).displayWhenDisabled(false)//
 						.modifyButton(btn -> btn.withIcon(ObservableSwingUtils.class, "icons/remove.png", 16, 16))//
 						)//
@@ -973,10 +989,11 @@ public class Finance extends JPanel {
 				.with("/", Money.class, double.class, (m1, div) -> new Money(Math.round(m1.value / div)), null, null, "Monetary division")//
 				// Instant operations
 				.with("+", Instant.class, ParsedDuration.class, (t, d) -> d.addTo(t, timeZone), null, null, "Instant addition")//
-				.with2("+", ParsedDuration.class, Instant.class, Instant.class, (d, t) -> d.addTo(t, timeZone), null, null, "Instant addition")//
+				.with2("+", ParsedDuration.class, Instant.class, Instant.class, (d, t) -> d.addTo(t, timeZone), null, null,
+						"Instant addition")//
 				.with("-", Instant.class, ParsedDuration.class, (t, d) -> d.negate().addTo(t, timeZone), null, null, "Instant subtraction")//
-				.with2("-", Instant.class, Instant.class, ParsedDuration.class, (i1, i2) -> TimeUtils.asFlexDuration(TimeUtils.between(i2, i1)),
-						null, null, "Instant subtraction")//
+				.with2("-", Instant.class, Instant.class, ParsedDuration.class,
+						(i1, i2) -> TimeUtils.asFlexDuration(TimeUtils.between(i2, i1)), null, null, "Instant subtraction")//
 				// Duration operations
 				.with("+", ParsedDuration.class, ParsedDuration.class, (d1, d2) -> d1.plus(d1), null, null, "Duration addition")//
 				.with("-", ParsedDuration.class, ParsedDuration.class, (d1, d2) -> d1.plus(d1.negate()), null, null, "Duration subtraction")//
