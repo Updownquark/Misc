@@ -347,7 +347,7 @@ public class Finance extends JPanel {
 
 		NonStructuredParser moneyParser = new NonStructuredParser() {
 			@Override
-			public boolean canParse(TypeToken<?> type, String text) {
+			public boolean canParse(TypeToken<?> type, String text, InterpretedExpressoEnv env) {
 				if (text.isEmpty() || text.charAt(0) != '$') {
 					return false;
 				}
@@ -358,8 +358,8 @@ public class Finance extends JPanel {
 			}
 
 			@Override
-			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text)
-					throws ParseException {
+			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text,
+					InterpretedExpressoEnv env) throws ParseException {
 				Money value = new Money(Math.round(Double.parseDouble(text.substring(1, text.length())) * 100));
 				return (InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>>) InterpretedValueSynth
 						.literalValue(TypeTokens.get().of(Money.class), value, text);
@@ -377,7 +377,7 @@ public class Finance extends JPanel {
 		};
 		NonStructuredParser instantParser = new NonStructuredParser() {
 			@Override
-			public boolean canParse(TypeToken<?> type, String text) {
+			public boolean canParse(TypeToken<?> type, String text, InterpretedExpressoEnv env) {
 				if (type.getType() == Instant.class) {
 					return true;
 				} else if (!TypeTokens.get().isAssignable(type, TypeTokens.get().of(Instant.class))) {
@@ -392,8 +392,8 @@ public class Finance extends JPanel {
 			}
 
 			@Override
-			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text)
-					throws ParseException {
+			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text,
+					InterpretedExpressoEnv env) throws ParseException {
 				Instant value = TimeUtils.parseInstant(text, true, true, null).evaluate(Instant::now);
 				return (InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>>) InterpretedValueSynth
 						.literalValue(TypeTokens.get().of(Instant.class), value, text);
@@ -411,7 +411,7 @@ public class Finance extends JPanel {
 		};
 		NonStructuredParser durationParser = new NonStructuredParser() {
 			@Override
-			public boolean canParse(TypeToken<?> type, String text) {
+			public boolean canParse(TypeToken<?> type, String text, InterpretedExpressoEnv env) {
 				if (type.getType() == ParsedDuration.class) {
 					return true;
 				} else if (!TypeTokens.get().isAssignable(type, TypeTokens.get().of(ParsedDuration.class))) {
@@ -426,8 +426,8 @@ public class Finance extends JPanel {
 			}
 
 			@Override
-			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text)
-					throws ParseException {
+			public <T> InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>> parse(TypeToken<T> type, String text,
+					InterpretedExpressoEnv env) throws ParseException {
 				ParsedDuration value = TimeUtils.parseDuration(text, true, true);
 				return (InterpretedValueSynth<SettableValue<?>, ? extends SettableValue<? extends T>>) InterpretedValueSynth
 						.literalValue(TypeTokens.get().of(ParsedDuration.class), value, text);
