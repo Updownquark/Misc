@@ -5,13 +5,13 @@ import java.awt.EventQueue;
 import java.awt.event.MouseEvent;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.function.Consumer;
 
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 import org.observe.ObservableValue;
 import org.observe.ObservableValueEvent;
+import org.observe.Observer;
 import org.observe.SettableValue;
 import org.observe.collect.DataControlledCollection;
 import org.observe.collect.ObservableCollection;
@@ -90,13 +90,13 @@ public class BetterFileBrowser extends JPanel {
 					.withSelection(selectedFile, false);
 				})).lastV(splitBottom -> splitBottom.fill().fillV().addComponent(null, new FileContentViewer(selectedFile),
 						f -> f.fill().fillV())));
-		isRefreshing.changes().act(new Consumer<ObservableValueEvent<Boolean>>() {
+		isRefreshing.changes().act(new Observer.SimpleObserver<ObservableValueEvent<Boolean>>() {
 			// We don't want to flash the wait cursor every second for trivial refreshes,
 			// but if refresh takes a while, tell the user about it
 			private volatile boolean isRefreshingNow;
 
 			@Override
-			public void accept(ObservableValueEvent<Boolean> evt) {
+			public void onNext(ObservableValueEvent<Boolean> evt) {
 				isRefreshingNow = evt.getNewValue();
 				if (isRefreshingNow) {
 					QommonsTimer.getCommonInstance()
