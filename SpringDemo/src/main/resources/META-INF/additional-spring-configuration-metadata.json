@@ -1,0 +1,17 @@
+{"properties": [
+  {
+    "name": "vista.scenarios.dir",
+    "type": "java.lang.String",
+    "description": "The directory where VISTA's scenario data is stored"
+  },
+  {
+    "name": "vista.auth.admin_server",
+    "type": "java.lang.String",
+    "description": "The location of the OAUTH server for VISTA"
+  },
+  {
+    "name": "vista.auth.client_name",
+    "type": "java.lang.String",
+    "description": "The name of the OAUTH client by which a user logs into the VISTA application"
+  }
+]}

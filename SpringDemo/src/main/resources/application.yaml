@@ -1,0 +1,46 @@
+logging:
+  level:
+    org.springframework.security: debug
+    org.springframework.web: debug
+
+spring:
+  config:
+    import: "optional:file:.env[.properties]"
+  application:
+    name: auth-data
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH_SERVER}
+      client:
+        registration:
+          demo-backend:
+            provider: auth-server
+            client-id: spring-demo
+            client-secret: "<OAUTH Server Client Secret>"
+            authorization-grant-type: "client_credentials"
+            scope: "openid"
+        provider:
+          auth-server:
+            issuer-uri: ${OAUTH_SERVER}
+  datasource:
+    url: jdbc:${USERS_DB_FLAVOR}://${USERS_DB_SERVER}/${USERS_DB}
+    username: ${USERS_USERNAME}
+    password: ${USERS_PASSWORD}
+    driver-class-name: ${USERS_DB_DRIVER}
+  jpa:
+    database-platform: ${USERS_DB_DIALECT}
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+demoData: # Demo application configuration
+  scenarios:
+    dir: "file:${DEMO_DATA}/scenarios"
+  auth:
+    admin_server: ${OAUTH_ADMIN_SERVER}
+    client_name: ${OAUTH_CLIENT}
