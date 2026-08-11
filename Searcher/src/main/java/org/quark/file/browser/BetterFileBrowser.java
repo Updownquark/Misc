@@ -18,7 +18,7 @@ import org.observe.collect.ObservableCollection;
 import org.observe.collect.ObservableSortedCollection;
 import org.observe.file.ObservableFile;
 import org.observe.util.swing.*;
-import org.qommons.LambdaUtils;
+import org.qommons.fn.FunctionUtils;
 import org.qommons.io.ArchiveEnabledFileSource;
 import org.qommons.io.BetterFile;
 import org.qommons.io.BetterFile.FileDataSource;
@@ -46,7 +46,7 @@ public class BetterFileBrowser extends JPanel {
 	public BetterFileBrowser(FileDataSource dataSource, ObservableFile workingDir) {
 		theDataSource = dataSource;
 		theWorkingDir = workingDir;
-		theFile = SettableValue.<ObservableFile> build().withValue(ObservableFile.observe(theWorkingDir)).build();
+		theFile = SettableValue.<ObservableFile> build().withValue(theWorkingDir).build();
 		theRoots = ObservableFile.getRoots(dataSource);
 		theCurrentContent = theFile.map(f -> f == null ? theRoots : f.listFiles());
 		theContent = ObservableCollection.flattenValue(theCurrentContent).flow().sorted(BetterFile.DISTINCT_NUMBER_TOLERANT).collect();
@@ -100,7 +100,7 @@ public class BetterFileBrowser extends JPanel {
 				isRefreshingNow = evt.getNewValue();
 				if (isRefreshingNow) {
 					QommonsTimer.getCommonInstance()
-					.build(LambdaUtils.printableRunnable(this::checkCursor, "checkCursor", null), null, false)
+					.build(FunctionUtils.printableRunnable(this::checkCursor, "checkCursor", null), null, false)
 					.runNextIn(Duration.ofMillis(100));
 				} else {
 					setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
