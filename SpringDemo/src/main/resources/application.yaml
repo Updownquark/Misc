@@ -1,7 +1,11 @@
 logging:
   level:
-    org.springframework.security: debug
-    org.springframework.web: debug
+    org:
+      springframework:
+        security: DEBUG
+        web: DEBUG
+        beans:
+          factory: info
 
 spring:
   config:
@@ -30,13 +34,15 @@ spring:
     password: ${USERS_PASSWORD}
     driver-class-name: ${USERS_DB_DRIVER}
   jpa:
-    database-platform: ${USERS_DB_DIALECT}
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
+  devtools:
+    restart:
+      enabled: false
 
 demoData: # Demo application configuration
   scenarios:
@@ -44,3 +50,11 @@ demoData: # Demo application configuration
   auth:
     admin_server: ${OAUTH_ADMIN_SERVER}
     client_name: ${OAUTH_CLIENT}
+
+
+springdoc:
+  api-docs:
+    path: "/docs"
+  swagger-ui:
+    path: "/docs-ui"
+    disable-swagger-default-url: true

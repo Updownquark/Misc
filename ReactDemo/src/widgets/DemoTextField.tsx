@@ -28,7 +28,7 @@ function DemoTextField<T>({ value, onChange, parser, renderer, validator }: Text
 		setDraftText(render(value, renderer));
 		setIsDirty(false);
 		setValid(null);
-	}, [value]);
+	}, []);
 
 	const commit = () => {
 		if (isDirty && isValid == null) {

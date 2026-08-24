@@ -7,7 +7,9 @@ import {
 	CallbackProperty,
 	CustomDataSource,
 	HeightReference,
+	MaterialProperty,
 } from "cesium";
+import { MapPolyLine, MapShapeSet } from "./DemoMapService";
 
 class MapDemoValues {
 	private readonly _lat0: number;
@@ -61,17 +63,33 @@ class MapDemoService {
 	private _values: MapDemoValues = new MapDemoValues(0, 0, 0, 0, 0, 0);
 	private _subscribers: Set<() => void> = new Set();
 
-	// Cesium uses CustomDataSource as a direct mapping to RenderableLayer
-	private readonly _dataSource: CustomDataSource = new CustomDataSource("MapDemoLayer");
-	private _pathEntity: Entity | null = null;
-	private _cleanupLayer: (() => void) | null = null;
+	private readonly layer: MapShapeSet;
+	private readonly path: MapPolyLine;
 
 	constructor() {
 		// Add the data source to the Cesium map and store the returned cleanup function
-		this._cleanupLayer = demoMap.addDataSource(this._dataSource);
-
-		// Initialize the persistent path using CallbackProperties
-		this._initPath();
+		this.layer = new MapShapeSet();
+		demoMap.addShapes(this.layer);
+		this.path = new MapPolyLine({
+			// 	positions: [
+			// 		{ lat: this._values.lat0, lon: this._values.lon0, alt: this._values.alt0 },
+			// 		{ lat: this._values.lat1, lon: this._values.lon1, alt: this._values.alt1 },
+			// 	],
+			width: 6,
+			color: Color.RED,
+		});
+		this.layer.addShape(this.path);
+		this.path.addHoverListener(
+			event => {
+				console.log("Hovering over demo line");
+			},
+			() => {
+				console.log("Mouse left demo line");
+			},
+		);
+		this.path.addMouseButtonListener((type, event) => {
+			console.log("Mouse button on demo line: " + type);
+		});
 
 		lifeCycle.onInit(async () => {
 			const data = await backend.get<MapDemoValues>("/mapDemo/values");
@@ -95,6 +113,38 @@ class MapDemoService {
 
 	public getValues(): MapDemoValues {
 		return this._values;
+	}
+
+	public get visible(): boolean {
+		return this.path.visible;
+	}
+
+	public set visible(visible: boolean) {
+		this.path.visible = visible;
+		demoMap.redraw();
+		for (const callback of this._subscribers) {
+			callback();
+		}
+	}
+
+	public get width(): number {
+		return this.path.width;
+	}
+	public set width(width: number) {
+		this.path.width = width;
+		for (const callback of this._subscribers) {
+			callback();
+		}
+	}
+
+	public get color(): Color {
+		return this.path.color;
+	}
+	public set color(color: Color) {
+		this.path.color = color;
+		for (const callback of this._subscribers) {
+			callback();
+		}
 	}
 
 	public set lat0(value: number) {
@@ -181,43 +231,17 @@ class MapDemoService {
 		}
 
 		console.log("Updating dynamic line positions");
-		// No need to run removeAllRenderables() or re-create geometries!
-		// The CallbackProperty inside _initPath handles tracking changes seamlessly.
+		this.path.geoPositions = [
+			{ lat: this._values.lat0, lon: this._values.lon0, alt: this._values.alt0 },
+			{ lat: this._values.lat1, lon: this._values.lon1, alt: this._values.alt1 },
+		];
 
 		demoMap.redraw();
 	}
 
-	private _initPath(): void {
-		// Construct the reactive entity path
-		this._pathEntity = new Entity({
-			polyline: new PolylineGraphics({
-				// The CallbackProperty automatically polls these positions when values change
-				positions: new CallbackProperty(() => {
-					return Cartesian3.fromDegreesArrayHeights([
-						this._values.lon0,
-						this._values.lat0,
-						this._values.alt0,
-						this._values.lon1,
-						this._values.lat1,
-						this._values.alt1,
-					]);
-				}, false),
-				width: 6,
-				material: Color.RED,
-				// RELATIVE_TO_GROUND requires clamps or specific setups.
-				// For direct altitude control relative to ground, we map it here:
-				clampToGround: false,
-			}),
-		});
-
-		this._dataSource.entities.add(this._pathEntity);
-	}
-
 	// Call this if the service lifecycle ever unmounts entirely
 	public dispose(): void {
-		if (this._cleanupLayer) {
-			this._cleanupLayer();
-		}
+		this.layer.removeFromMap();
 	}
 }
 

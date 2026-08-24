@@ -6,8 +6,10 @@ class DemoMapService {
 	private _theViewer: Cesium.Viewer | null = null;
 	// Track layers using Cesium's ImageryLayer type
 	private readonly _layers: Cesium.ImageryLayer[] = [];
-	private readonly _dataSources: Cesium.DataSource[] = [];
+	private readonly _dataSources: MapShapeSet[] = [];
 	private _isInitializing: boolean = false;
+	private readonly _mapInteractionListeners: Cesium.ScreenSpaceEventHandler[] = [];
+	private _pickedShape: MapShape | null = null;
 
 	constructor() {}
 
@@ -23,14 +25,15 @@ class DemoMapService {
 			mapMode2D: Cesium.MapMode2D.ROTATE,
 		});
 
-		this._configureWWStyleControls();
+		this._mapInteractionListeners.push(this._configureWWStyleControls());
+		this._mapInteractionListeners.push(this._setupShapeInteractionListening());
 
 		// Install populated custom layers into Cesium's imagery collection
 		for (const layer of this._layers) {
 			this._theViewer.imageryLayers.add(layer);
 		}
 		for (const dataSource of this._dataSources) {
-			this._theViewer.dataSources.add(dataSource);
+			this._theViewer.dataSources.add(dataSource.dataSource);
 		}
 		this._isInitializing = false;
 	}
@@ -54,25 +57,26 @@ class DemoMapService {
 		};
 	}
 
-	public addDataSource(dataSource: Cesium.DataSource): () => void {
-		this._dataSources.push(dataSource);
+	public addShapes(shapes: MapShapeSet) {
+		shapes.removeFromMap();
+		this._dataSources.push(shapes);
 
 		// If the viewer is already active, inject it immediately
 		if (this._theViewer) {
-			this._theViewer.dataSources.add(dataSource);
+			this._theViewer.dataSources.add(shapes.dataSource);
 		}
 
-		// Return a clean teardown function
-		return () => {
-			const index = this._dataSources.indexOf(dataSource);
+		shapes.remove = () => {
+			const index = this._dataSources.indexOf(shapes);
 			if (index >= 0) {
 				this._dataSources.splice(index, 1);
 			}
 			if (this._theViewer) {
-				this._theViewer.dataSources.remove(dataSource, true);
+				this._theViewer.dataSources.remove(shapes.dataSource, true);
 			}
 		};
 	}
+
 	public goTo(latitude: number, longitude: number, altitude: number): void {
 		if (this._theViewer) {
 			// Cesium uses radians for Cartographic positions
@@ -93,6 +97,7 @@ class DemoMapService {
 
 	public destroy(): void {
 		if (this._theViewer) {
+			for (const handler of this._mapInteractionListeners) handler.destroy();
 			this._theViewer.imageryLayers.removeAll(true);
 			this._theViewer.destroy();
 			this._theViewer = null;
@@ -110,7 +115,7 @@ class DemoMapService {
 		return this._theViewer.scene.globe.pick(ray, this._theViewer.scene);
 	}
 
-	private _configureWWStyleControls() {
+	private _configureWWStyleControls(): Cesium.ScreenSpaceEventHandler {
 		const scene = this._theViewer.scene;
 		const camera = this._theViewer.camera;
 		const controller = scene.screenSpaceCameraController;
@@ -225,15 +230,11 @@ class DemoMapService {
 					if (!rotate) {
 						// Do nothing
 					} else if (rotAngle > 0) {
-						if(twoD)
-							camera.twistLeft(rotAngle);
-						else
-							camera.rotateRight(rotAngle);
+						if (twoD) camera.twistLeft(rotAngle);
+						else camera.rotateRight(rotAngle);
 					} else {
-						if(twoD)
-							camera.twistRight(-rotAngle);
-						else
-							camera.rotateLeft(-rotAngle);
+						if (twoD) camera.twistRight(-rotAngle);
+						else camera.rotateLeft(-rotAngle);
 					}
 				}
 
@@ -251,7 +252,585 @@ class DemoMapService {
 			isTilting = false;
 			controller.enableInputs = true;
 		}, Cesium.ScreenSpaceEventType.RIGHT_UP);
+
+		return handler;
+	}
+
+	private _setupShapeInteractionListening(): Cesium.ScreenSpaceEventHandler {
+		const scene = this._theViewer.scene;
+		const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+		handler.setInputAction(movement => {
+			let pickedShape= this.getVistaShapeAt(movement.endPosition);
+			const prevPicked=this._pickedShape;
+			this._pickedShape=pickedShape;
+			if(prevPicked!=pickedShape){
+				if(prevPicked)
+					prevPicked.mouseUnhovered();
+				if(pickedShape)
+					pickedShape.mouseHovered(new LazyMouseEvent(scene, movement.endPosition));
+			}
+		}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+		this._theViewer.canvas.addEventListener("mouseleave", ()=>{
+			const prevPicked=this._pickedShape;
+			this._pickedShape=null;
+			if(prevPicked)
+				prevPicked.mouseUnhovered();
+		});
+		const buttonEventTypes=[
+			Cesium.ScreenSpaceEventType.LEFT_CLICK,
+			Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+			Cesium.ScreenSpaceEventType.LEFT_DOWN,
+			Cesium.ScreenSpaceEventType.LEFT_UP,
+			Cesium.ScreenSpaceEventType.MIDDLE_CLICK,
+			Cesium.ScreenSpaceEventType.MIDDLE_DOWN,
+			Cesium.ScreenSpaceEventType.MIDDLE_UP,
+			Cesium.ScreenSpaceEventType.RIGHT_CLICK,
+			Cesium.ScreenSpaceEventType.RIGHT_DOWN,
+			Cesium.ScreenSpaceEventType.RIGHT_UP,
+		];
+		for(const type of buttonEventTypes){
+			handler.setInputAction((event)=>{
+				const shape=this.getVistaShapeAt(event.position);
+				if(shape)
+					shape.mouseButtonEvent(type, new LazyMouseEvent(scene, event.position));
+			}, type);
+		}
+		return handler;
+	}
+
+	private getVistaShapeAt(position: Cesium.Cartesian2): MapShape | null {
+		const picked = this._theViewer.scene.pick(position);
+		let pickedShape: MapShape | null = null;
+		if (Cesium.defined(picked)//
+			&& picked.id instanceof Cesium.Entity//
+			&& (picked.id as Cesium.Entity).properties.hasProperty(VISTA_SHAPE_PROPERTY)) {
+			pickedShape=(picked.id.properties[VISTA_SHAPE_PROPERTY] as Cesium.Property).getValue() as MapShape;
+		}
+		return pickedShape;
 	}
 }
 
-export default DemoMapService;
+export class MapShapeSet {
+	private readonly _dataSource: Cesium.DataSource;
+	private _remove: () => void;
+
+	constructor() {
+		this._dataSource = new Cesium.CustomDataSource();
+	}
+
+	get dataSource(): Cesium.DataSource {
+		return this._dataSource;
+	}
+
+	set remove(remove: () => void) {
+		this._remove = remove;
+	}
+
+	public get name(): string {
+		return this._dataSource.name;
+	}
+	public set name(name: string) {
+		this._dataSource.name = name;
+	}
+
+	public get visible(): boolean {
+		return this._dataSource.show;
+	}
+	public set visible(visible: boolean) {
+		this._dataSource.show = visible;
+	}
+
+	public addShape(shape: MapShape) {
+		this._dataSource.entities.add(shape.getCesiumEntity());
+	}
+	public removeShape(shape: MapShape) {
+		this._dataSource.entities.remove(shape.getCesiumEntity());
+	}
+	public removeAllShapes() {
+		this._dataSource.entities.removeAll();
+	}
+
+	public removeFromMap() {
+		if (this._remove) {
+			this._remove();
+			this._remove;
+		}
+	}
+}
+
+export class LatLon {
+	readonly lat: number;
+	readonly lon: number;
+
+	constructor(lat: number, lon: number) {
+		this.lat = lat;
+		this.lon = lon;
+	}
+}
+
+export class LatLonAlt extends LatLon {
+	readonly alt: number;
+
+	constructor(lat: number, lon: number, alt: number) {
+		super(lat, lon);
+		this.alt = alt;
+	}
+
+	static fromCarto(carto: Cesium.Cartographic): LatLonAlt {
+		return new LatLonAlt(
+			Cesium.Math.toDegrees(carto.latitude),
+			Cesium.Math.toDegrees(carto.longitude),
+			carto.height,
+		);
+	}
+}
+
+export interface MouseEvent{
+	screenPosition: Cesium.Cartesian2;
+	position: Cesium.Cartesian3;
+	geoPosition: LatLonAlt;
+}
+
+class LazyMouseEvent implements MouseEvent{
+	private readonly _scene: Cesium.Scene;
+	private readonly _screenPos: Cesium.Cartesian2;
+	private _position: Cesium.Cartesian3 | null = null;
+	private _geoPosition: LatLonAlt | null = null;
+
+	constructor(scene: Cesium.Scene, screenPos: Cesium.Cartesian2){
+		this._scene=scene;
+		this._screenPos=screenPos;
+	}
+
+	get screenPosition(): Cesium.Cartesian2{
+		return this._screenPos;
+	}
+
+	get position(): Cesium.Cartesian3{
+		if(!this._position)
+			this._position=this._scene.pickPosition(this._screenPos);
+		return this._position;
+	}
+
+	get geoPosition(): LatLonAlt{
+		if(!this._geoPosition){
+			const pos=this.position;
+			if(!pos)
+				return null;
+			this._geoPosition=LatLonAlt.fromCarto(Cesium.Cartographic.fromCartesian(pos));
+		}
+		return this._geoPosition;
+	}
+}
+
+export type MapMouseButtonListener = (
+	type: Cesium.ScreenSpaceEventType,
+	event: MouseEvent,
+) => void;
+export type MapHoverListener=(event: MouseEvent) => void;
+
+interface MapHoverAndUnhoverListener{
+	hover: MapHoverListener
+	unhover?: ()=>void;
+}
+
+const VISTA_SHAPE_PROPERTY="vistaShape";
+
+export interface MapShapeConfig{
+	visible?: boolean;
+	label?: MapLabelConfig;
+}
+
+export interface MapLabelConfig{
+	text?: string;
+	position?: Cesium.Cartesian3;
+	geoPosition?: LatLonAlt;
+	fillColor?: Cesium.Color;
+	outlineColor?: Cesium.Color;
+	style?: Cesium.LabelStyle;
+	pixelOffset?: Cesium.Cartesian2;
+	horizontalOrigin?: Cesium.HorizontalOrigin;
+	verticalOrigin?: Cesium.VerticalOrigin;
+	font?: string;
+	visible?: boolean;
+}
+
+export abstract class MapShape {
+	private readonly _entity: Cesium.Entity;
+	private readonly _buttonListeners: MapMouseButtonListener[] = [];
+	private readonly _hoverListeners: MapHoverAndUnhoverListener[] = [];
+	private _isHovered: boolean = false;
+	private _labelPositionDefault: boolean = true;
+	private _labelFillColorDefault: boolean=true;
+	private _labelOutlineColorDefault: boolean=true;
+
+	constructor(config?: MapShapeConfig){
+		this._entity=new Cesium.Entity();
+		this._entity.properties = new Cesium.PropertyBag();
+		this._entity.properties.addProperty(VISTA_SHAPE_PROPERTY, new Cesium.ConstantProperty(this));
+		if(config && config.label)
+			this.label(config.label);
+	}
+
+	getCesiumEntity(): Cesium.Entity{
+		return this._entity;
+	}
+
+	public abstract get visible(): boolean;
+	public abstract set visible(visible: boolean);
+
+	public label(config: MapLabelConfig){
+		if(!config){
+			if(this._entity.label)
+				this._entity.label.show=new Cesium.ConstantProperty(false);
+		} else{
+			let position: Cesium.Cartesian3 | null = null;
+			if(config.geoPosition){
+				this._labelPositionDefault=false;
+				position=Cesium.Cartesian3.fromDegrees(config.geoPosition.lon, config.geoPosition.lat, config.geoPosition.alt);
+			} else if(config.position){
+				this._labelPositionDefault=false;
+				position=config.position;
+			} else if(!this._entity.position?.getValue()){
+				this._labelPositionDefault=true;
+				position=this.getDefaultLabelPosition();
+			}
+			if(position)
+				this._entity.position=new Cesium.ConstantPositionProperty(position);
+			let fillColor: Cesium.Color | null = null;
+			if(config.fillColor){
+				this._labelFillColorDefault=false;
+				fillColor=config.fillColor;
+			} else if(!this._entity.label?.fillColor?.getValue()){
+				this._labelFillColorDefault=true;
+				fillColor=this.getDefaultLabelColor();
+			}
+			let outlineColor: Cesium.Color | null = null;
+			if(config.outlineColor){
+				this._labelOutlineColorDefault=false;
+				outlineColor=config.outlineColor;
+			} else if(!this._entity.label?.outlineColor?.getValue()){
+				this._labelOutlineColorDefault=true;
+				outlineColor=this.getDefaultLabelColor();
+			}
+			if(!this._entity.label){
+				this._entity.label=new Cesium.LabelGraphics({
+					text: config.text ?? "Label Text",
+					fillColor: config.fillColor ?? this.getDefaultLabelColor(),
+					outlineColor: outlineColor ?? Cesium.Color.BLACK,
+					style: config.style ?? Cesium.LabelStyle.FILL_AND_OUTLINE,
+					pixelOffset: config.pixelOffset,
+					horizontalOrigin: config.horizontalOrigin?? Cesium.HorizontalOrigin.LEFT,
+					verticalOrigin: config.verticalOrigin?? Cesium.VerticalOrigin.BOTTOM,
+					font: config.font?? "20px sans-serif", //Default 30px font is too huge
+					show: config.visible?? true,
+				});
+			} else{
+				if(config.text)
+					this._entity.label.text=new Cesium.ConstantProperty(config.text);
+				if(config.fillColor)
+					this._entity.label.fillColor=new Cesium.ConstantProperty(config.fillColor);
+				if(outlineColor)
+					this._entity.label.outlineColor=new Cesium.ConstantProperty(outlineColor);
+				if(config.style)
+					this._entity.label.style=new Cesium.ConstantProperty(config.style);
+				if(config.pixelOffset)
+					this._entity.label.pixelOffset=new Cesium.ConstantProperty(config.pixelOffset);
+				if(config.horizontalOrigin)
+					this._entity.label.horizontalOrigin=new Cesium.ConstantProperty(config.horizontalOrigin);
+				if(config.verticalOrigin)
+					this._entity.label.verticalOrigin=new Cesium.ConstantProperty(config.verticalOrigin);
+				if(config.font)
+					this._entity.label.font=new Cesium.ConstantProperty(config.font);
+				this._entity.label.show=new Cesium.ConstantProperty(config.visible?? true);
+			}
+		}
+	}
+
+	protected positionChanged(){
+		if(this._entity.label && this._labelPositionDefault){
+			const position=this.getDefaultLabelPosition();
+			if(position)
+				this._entity.position=new Cesium.ConstantPositionProperty(position);
+		}
+	}
+
+	protected abstract getDefaultLabelPosition(): Cesium.Cartesian3;
+
+	protected colorChanged(){
+		if(this._entity.label && (this._labelFillColorDefault || this._labelOutlineColorDefault)){
+			const defaultColor=new Cesium.ConstantProperty(this.getDefaultLabelColor());
+			if(this._labelFillColorDefault)
+				this._entity.label.fillColor=defaultColor;
+			if(this._labelOutlineColorDefault)
+				this._entity.label.outlineColor=defaultColor;
+		}
+	}
+
+	protected abstract getDefaultLabelColor(): Cesium.Color;
+
+	public addMouseButtonListener(listener: MapMouseButtonListener): () => void {
+		this._buttonListeners.push(listener);
+		return () => {
+			const index = this._buttonListeners.indexOf(listener);
+			if (index >= 0) this._buttonListeners.splice(index, 1);
+		};
+	}
+	public addHoverListener(hoverListener: MapHoverListener, unhoverListener?: ()=>void): () => void {
+		const hoverAndUnhover: MapHoverAndUnhoverListener = {
+			hover: hoverListener,//
+			unhover: unhoverListener
+		}
+		this._hoverListeners.push(hoverAndUnhover);
+		return () => {
+			const index = this._hoverListeners.indexOf(hoverAndUnhover);
+			if (index >= 0) this._buttonListeners.splice(index, 1);
+		};
+	}
+	public get hovered(): boolean {
+		return this._isHovered;
+	}
+
+	mouseButtonEvent(type: Cesium.ScreenSpaceEventType, event: MouseEvent) {
+		for (const listener of this._buttonListeners) {
+			try {
+				listener(type, event);
+			} catch (e) {
+				console.log("Error in shape hover listener ", listener, " for shape ", this, e);
+			}
+		}
+	}
+	mouseHovered(event: MouseEvent) {
+		this._isHovered=true;
+		for (const listener of this._hoverListeners) {
+			try {
+				listener.hover(event);
+			} catch (e) {
+				console.log("Error in shape hover listener ", listener, " for shape ", this, e);
+			}
+		}
+	}
+	mouseUnhovered(){
+		this._isHovered=false;
+		for (const listener of this._hoverListeners) {
+			try {
+				if(listener.unhover)
+					listener.unhover();
+			} catch (e) {
+				console.log("Error in shape hover listener ", listener, " for shape ", this, e);
+			}
+		}
+	}
+}
+
+export interface MapMarkerConfig extends MapShapeConfig{
+	position?: Cesium.Cartesian3;
+	geoPosition?: LatLonAlt;
+	pixelSize?: number;
+	color?: Cesium.Color;
+	outlineColor?: Cesium.Color;
+	outlineWidth?: number;
+}
+
+export class MapMarker extends MapShape{
+	constructor(config?: MapMarkerConfig){
+		super(config);
+		if(config?.position){
+			if(config.geoPosition)
+				throw new Error("Specify position or geoPosition, but not both");
+			this.getCesiumEntity().position=new Cesium.ConstantPositionProperty(config.position);
+		} else if(config?.geoPosition){
+			this.getCesiumEntity().position=new Cesium.ConstantPositionProperty(Cesium.Cartesian3.fromDegrees(
+				config.geoPosition.lon, config.geoPosition.lat, config.geoPosition.alt));
+		}
+		this.getCesiumEntity().point=new Cesium.PointGraphics({
+			pixelSize: config?.pixelSize ?? 3,
+			color: config?.color ?? Cesium.Color.BLACK,
+			outlineColor: config?.outlineColor ?? Cesium.Color.BLACK,
+			outlineWidth: config?.outlineWidth ?? 0,
+		});
+	}
+
+	public get position(): Cesium.Cartesian3{
+		return this.getCesiumEntity().position.getValue();
+	}
+	public set position(position: Cesium.Cartesian3){
+			this.getCesiumEntity().position=new Cesium.ConstantPositionProperty(position);
+	}
+
+	public get geoPosition(): LatLonAlt{
+		return LatLonAlt.fromCarto(Cesium.Cartographic.fromCartesian(this.position));
+	}
+	public set geoPosition(position: LatLonAlt){
+		this.position=Cesium.Cartesian3.fromDegrees(position.lon, position.lat, position.alt);
+	}
+
+	public get visible(): boolean {
+		return this.getCesiumEntity().show;
+	}
+	public set visible(visible: boolean) {
+		this.getCesiumEntity().show=visible;
+	}
+
+	public get color(): Cesium.Color{
+		return this.getCesiumEntity().point.color.getValue();
+	}
+	public set color(color: Cesium.Color){
+		this.getCesiumEntity().point.color=new Cesium.ConstantProperty(color);
+	}
+
+	public label(config: MapLabelConfig): void {
+		if(config?.position)
+			config.position=null; //Don't set the position to the hovered point
+		super.label(config);
+	}
+
+	protected getDefaultLabelPosition(): Cesium.Cartesian3 {
+		return this.position;
+	}
+	protected getDefaultLabelColor(): Cesium.Color {
+		return this.color;
+	}
+}
+
+export interface PolyLineConfig extends MapShapeConfig{
+	positions?: LatLonAlt[];
+	width?: number;
+	color?: Cesium.Color;
+	material?: Cesium.MaterialProperty;
+	clampToGround?: boolean;
+}
+
+export class MapPolyLine extends MapShape {
+	private readonly _polyLine: Cesium.PolylineGraphics;
+	private _positions: Cesium.Cartesian3[] = [];
+
+	constructor(config?: PolyLineConfig) {
+		super(config);
+		let material: Cesium.MaterialProperty=new Cesium.ColorMaterialProperty(Cesium.Color.BLACK);
+		if(config){
+			if(config.color){
+				if(config.material)
+					throw new Error("Specify either color or material, but not both");
+				material=new Cesium.ColorMaterialProperty(config.color);
+			} else if(config.material)
+				material=config.material;
+
+			if (config.positions) {
+				for (const position of config.positions)
+					this._positions.push(Cesium.Cartesian3.fromDegrees(position.lon, position.lat, position.alt));
+			}
+		}
+		const self=this;
+		this._polyLine = new Cesium.PolylineGraphics({
+			positions: new Cesium.CallbackProperty((time, result) => {
+				const newResult=(result ?? []) as Cesium.Cartesian3[];
+				newResult.length=self._positions.length;
+				for(let i=0;i<self._positions.length;i++)
+					newResult[i]=self._positions[i];
+				return newResult;
+			}, false), //
+			width: config?.width ?? 2, //
+			material: material, //
+			clampToGround: config?.clampToGround ?? false, //
+			show: config && config.visible != undefined ? config.visible : true, //
+		});
+		this.getCesiumEntity().polyline=this._polyLine;
+	}
+
+	public modify(config: PolyLineConfig) {
+		if (config.positions) this.geoPositions = config.positions;
+		if (config.width) this.width = config.width;
+		if(config.material)
+			throw new Error("Material cannot be assigned this way");
+		if (config.color) this.color = config.color;
+		if (config.clampToGround != undefined) this.clampToGround = config.clampToGround;
+		if (config.visible != undefined) this.visible = config.visible;
+	}
+
+	public get cartPositions(): readonly Cesium.Cartesian3[] {
+		return this._positions;
+	}
+
+	public get geoPositions(): readonly LatLonAlt[] {
+		return this._positions.map(cart => LatLonAlt.fromCarto(Cesium.Cartographic.fromCartesian(cart)));
+	}
+
+	public set geoPositions(geoPositions: LatLonAlt[]) {
+		const newPositions: Cesium.Cartesian3 []=[];
+		for (let p = 0; p < geoPositions.length; p++) {
+			if (geoPositions[p]) {
+				newPositions.push(Cesium.Cartesian3.fromDegrees(
+					geoPositions[p].lon,
+					geoPositions[p].lat,
+					geoPositions[p].alt,
+				));
+			} else if(p<this._positions.length)
+				newPositions.push(this._positions[p]);
+			else
+				throw new Error(
+					"Sparse position configuration error: missing position at index " + this._positions.length,
+				);
+		}
+		this._positions=newPositions;
+		this.positionChanged();
+	}
+
+	public get material(): Cesium.MaterialProperty {
+		return this._polyLine.material;
+	}
+	public get color(): Cesium.Color | null {
+		if(this.material instanceof Cesium.ColorMaterialProperty)
+			return (this.material as Cesium.ColorMaterialProperty).color.getValue();
+		else
+			return null;
+	}
+	public set color(color: Cesium.Color){
+		const mtrl=this.material as any;
+		if(mtrl.color && typeof mtrl.color.setValue==="function")
+			mtrl.color.setValue(color);
+		else
+			throw new Error("Cannot set the color of a polyline that was initialized with a non-color material");
+		this.colorChanged();
+	}
+
+	public get width(): number {
+		return this._polyLine.width.getValue();
+	}
+	public set width(width: number) {
+		(this._polyLine.width as Cesium.ConstantProperty).setValue(width);
+	}
+
+	public get clampToGround(): boolean {
+		return this._polyLine.clampToGround.getValue();
+	}
+	public set clampToGround(clamp: boolean) {
+		(this._polyLine.clampToGround as Cesium.ConstantProperty).setValue(clamp);
+	}
+
+	public get visible(): boolean {
+		return this._polyLine.show.getValue();
+	}
+	public set visible(visible: boolean) {
+		(this._polyLine.show as Cesium.ConstantProperty).setValue(visible);
+	}
+
+	protected getDefaultLabelPosition(): Cesium.Cartesian3{
+		switch(this._positions.length){
+			case 0:
+				return null;
+			case 1:
+				return this._positions[0];
+			default:
+				const p0=this._positions[0];
+				const p1=this._positions[1];
+				return new Cesium.Cartesian3((p0.x+p1.x)/2, (p0.y+p1.y)/2, (p0.z+p1.z)/2);
+		}
+	}
+
+	protected getDefaultLabelColor(): Cesium.Color{
+		return this.color;
+	}
+}
+
+export default VistaMapService;

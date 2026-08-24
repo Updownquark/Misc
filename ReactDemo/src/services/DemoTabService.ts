@@ -88,7 +88,7 @@ class DemoTabService {
 	private readonly _tabsById: Map<string, DemoTab> = new Map();
 	private _allTabs: DemoTab[] = [];
 	private _visibleTabs: DemoTab[] = [];
-	private _selectedTab: v | null = null;
+	private _selectedTab: DemoTab | null = null;
 	private readonly _tabSetSubscribers: TabSetListener[] = [];
 	private readonly _selectedTabSubscribers: SelectedTabListener[] = [];
 
@@ -97,6 +97,7 @@ class DemoTabService {
 			//Tab has already been added
 			return;
 		}
+		tab.__setService(this);
 		this._tabsById.set(tab.id, tab);
 		let index = binarySearch(this._allTabs, other => tab.compareTo(other));
 		if (index < 0) index = -index - 1;
@@ -210,4 +211,4 @@ class DemoTabService {
 	}
 }
 
-export default DemoTabService;
+export default DemoBackendTabService;

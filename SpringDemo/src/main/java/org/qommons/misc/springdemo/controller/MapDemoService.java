@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/mapDemo")
 public class MapDemoService {
 	private double theLat0 = 32;
-	private double theLon0 = -108;
+	private double theLon0 = -106;
 	private double theAlt0 = 2;
 	private double theLat1 = 32.1;
-	private double theLon1 = -108.1;
+	private double theLon1 = -106.1;
 	private double theAlt1 = 2;
 
 	@GetMapping("/values")

@@ -52,6 +52,10 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webflux</artifactId>
 		</dependency>
 		<dependency>
@@ -111,6 +115,13 @@
 			<groupId>org.observe</groupId>
 			<artifactId>ObServe</artifactId>
 			<version>3.0.0</version>
+		</dependency>
+
+		<!-- Trying to resolve some jar hell issues here -->
+		<dependency>
+			<groupId>org.antlr</groupId>
+			<artifactId>antlr4-runtime</artifactId>
+			<version>4.13.2</version>
 		</dependency>
 	</dependencies>
 
