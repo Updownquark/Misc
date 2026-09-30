@@ -1,50 +1,79 @@
 
-type Listener = () => void;
+type Listener = () => any;
 
-export enum LifeCycleStage {
-	PreInit = "Pre-Init",
-	Initializing = "Initializing",
-	Active = "Active",
-	ShuttingDown = "Shutting Down",
-	Dead = "Dead"
+export const LifeCycleStage = {
+	PreInit: "Pre-Init",
+	Initializing: "Initializing",
+	Active: "Active",
+	ShuttingDown: "Shutting Down",
+	Dead: "Dead"
+} as const;
+export type LifeCycleStage=typeof LifeCycleStage [keyof typeof LifeCycleStage];
+
+class DoAfterInactivity{
+	constructor(
+		public doNextAt: number,
+		private readonly action: Listener,
+	){}
+
+	maybeRun(): number {
+		const now=Date.now();
+		if(now>=this.doNextAt)
+			this.action();
+		return this.doNextAt-now;
+	}
 }
 
-export class LifeCycleService{
-	private _stage=LifeCycleStage.PreInit;
+class LifeCycleService{
+	private static readonly CLONE_TAB_DETECTION="vista_tab_";
+
+	private readonly _isNewTab: boolean;
+	private _stage: LifeCycleStage=LifeCycleStage.PreInit;
 	private _initSubscribers = new Set<Listener>();
 	private _heartBeatSubscribers = new Set<Listener>();
 	private _shutdownSubscribers = new Set<Listener>();
 	private _intervalId: ReturnType<typeof setInterval> | null = null;
 	private _isBeating: boolean = false;
 	private _beatIntervalMs: number;
+	private readonly _inactivityActions=new Map<Object, DoAfterInactivity>();
 
-	constructor(syncIntervalMs=10_000){
+	constructor(syncIntervalMs=60_000){
 		this._beatIntervalMs=syncIntervalMs;
+
+		//Detect tab cloning to prevent unique resource re-use
+		if(!window.name){
+			this._isNewTab=true;
+			window.name=LifeCycleService.CLONE_TAB_DETECTION+crypto.randomUUID;
+		} else
+			this._isNewTab=window.name.indexOf(LifeCycleService.CLONE_TAB_DETECTION)<0;
 	}
 	
-	public getStage = (): LifeCycleStage => {
+	public getStage (): LifeCycleStage {
 		return this._stage;
 	}
 
-	public isBeating = (): boolean => {
+	public isBeating (): boolean {
 		return this._isBeating;
 	}
 
-	public onInit = (callback: Listener): () => void => {
+	public isNewTab(): boolean {
+		return this._isNewTab;
+	}
+
+	public onInit(callback: Listener): () => void {
 		switch(this._stage){
 			case LifeCycleStage.PreInit:
+			case LifeCycleStage.Initializing:
 				this._initSubscribers.add(callback);
 				return ()=>this._initSubscribers.delete(callback);
-			case LifeCycleStage.Initializing:
-				console.warn("The app is already initializing");
-				break;
 			default:
-				console.warn("The app has already been initialized");
+				// Already initialized, so this should be safe
+				callback();
 				break;
 		}
 	}
 
-	public onHeartBeat = (callback: Listener): () => void => {
+	public onHeartBeat (callback: Listener): () => void {
 		switch(this._stage){
 			case LifeCycleStage.PreInit:
 			case LifeCycleStage.Initializing:
@@ -52,18 +81,18 @@ export class LifeCycleService{
 				this._heartBeatSubscribers.add(callback);
 				return ()=>this._heartBeatSubscribers.delete(callback);
 			default:
-				console.warn("The app is not active");
+				console.warn("VISTA is not active");
 				break;
 		}
 	}
 
-	public onShutdown = (callback: Listener): () => void => {
+	public onShutdown (callback: Listener): () => void {
 		//Don't bother checking this
 		this._shutdownSubscribers.add(callback);
 		return ()=>this._shutdownSubscribers.delete(callback);
 	}
 
-	public beat = async (): Promise<boolean> => {
+	public async beat (): Promise<boolean> {
 		if(this._isBeating)
 			return false;
 		else if(this._stage!=LifeCycleStage.Active)
@@ -84,36 +113,63 @@ export class LifeCycleService{
 		return true;
 	}
 	
-	public setBeatInterval = (syncIntervalMs: number): void =>{
+	public setBeatInterval(syncIntervalMs: number): void {
 		if(this._beatIntervalMs==syncIntervalMs)
 			return;
 		
 		this._beatIntervalMs=syncIntervalMs;
 		if(this._intervalId){
 			clearInterval(this._intervalId);
-			this._intervalId = setInterval(this.beat, this._beatIntervalMs);
+			this._intervalId = setInterval(()=>this.beat(), this._beatIntervalMs);
+		}
+	}
+
+	public doAfterInactivity(key: any, wait: number, action: Listener){
+		const now=Date.now();
+		let dai=this._inactivityActions.get(key);
+		if(dai)
+			dai.doNextAt=now+wait;
+		else{
+			dai=new DoAfterInactivity(now+wait, action);
+			this._inactivityActions.set(key, dai);
+			const timeout=()=>{
+				const nextRun=dai.maybeRun();
+				if(nextRun>0)
+					setTimeout(timeout, nextRun+5);
+				else
+					this._inactivityActions.delete(key);
+			};
+			setTimeout(timeout, wait+5);
 		}
 	}
 	
-	public start(): void {
+	public async start() {
 		if(this._stage!=LifeCycleStage.PreInit)
 			return; //The lifecycle should not be started twice
 		
 		this._stage=LifeCycleStage.Initializing;
-		this._initSubscribers.forEach((callback) =>{
-			try{
-				callback();
-			} catch(error){
-				console.error("Initializer callback ", callback, " did not execute successfully: ", error)
-			}
-		});
+		await this.callSubscribers(this._initSubscribers);
 		this._initSubscribers=null;
 		
 		this._stage=LifeCycleStage.Active;
 		
 		this.beat();
 		
-		this._intervalId = setInterval(this.beat, this._beatIntervalMs);
+		this._intervalId = setInterval(()=>this.beat(), this._beatIntervalMs);
+	}
+
+	private async callSubscribers(subs: Set<Listener>){
+		for(const sub of subs){
+			try{
+				const ret=sub();
+				if(ret//
+					 && (typeof ret === "object" || typeof ret === "function")//
+					 && typeof ret.then === "function") //Returned a promise.  Let it run before continuing.
+						await (ret as Promise<any>);
+			} catch(error){
+				console.error("Initializer callback ", sub, " did not execute successfully: ", error)
+			}
+		}
 	}
 	
 	public stop(): void {
@@ -129,14 +185,16 @@ export class LifeCycleService{
 		this._stage=LifeCycleStage.ShuttingDown;
 		clearInterval(this._intervalId);
 		this._intervalId=null;
-		
-		this._shutdownSubscribers.forEach((callback) =>{
+
+		for(const sub of this._shutdownSubscribers){
 			try{
-				callback();
+				sub();
 			} catch(error){
-				console.error("Shutdown callback ", callback, " did not execute successfully: ", error)
+				console.error("Shutdown callback ", sub, " did not execute successfully: ", error)
 			}
-		});
+		}
 		this._stage=LifeCycleStage.Dead;
 	}
 }
+
+export default LifeCycleService;

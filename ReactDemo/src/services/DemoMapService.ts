@@ -1,6 +1,21 @@
+import { Experimental_CssVarsProvider } from "@mui/material";
 import { BACKEND_API_URL } from "../config/backend";
 import { CESIUM_ACCESS_TOKEN } from "../config/CesiumToken";
 import * as Cesium from "cesium";
+import { clientData, lifeCycle } from "./services";
+
+interface MapView{
+	position: MapViewPosition;
+	heading: number;
+	pitch: number;
+	roll: number;
+}
+
+interface MapViewPosition{
+	x: number;
+	y: number;
+	z: number;
+}
 
 class DemoMapService {
 	private _theViewer: Cesium.Viewer | null = null;
@@ -10,6 +25,8 @@ class DemoMapService {
 	private _isInitializing: boolean = false;
 	private readonly _mapInteractionListeners: Cesium.ScreenSpaceEventHandler[] = [];
 	private _pickedShape: MapShape | null = null;
+	private _viewChanged = false;
+	private _viewSaveIntervalId: ReturnType<typeof setInterval> | null = null;
 
 	constructor() {}
 
@@ -27,6 +44,14 @@ class DemoMapService {
 
 		this._mapInteractionListeners.push(this._configureWWStyleControls());
 		this._mapInteractionListeners.push(this._setupShapeInteractionListening());
+		lifeCycle.onInit(()=>this.restoreMapView());
+		this._viewSaveIntervalId=setInterval(()=>{
+			if(this._viewChanged){
+				this.saveMapView();
+				this._viewChanged=false;
+			}
+		}, 1000);
+		this._theViewer.camera.moveEnd.addEventListener(()=>this._viewChanged=true);
 
 		// Install populated custom layers into Cesium's imagery collection
 		for (const layer of this._layers) {
@@ -36,6 +61,10 @@ class DemoMapService {
 			this._theViewer.dataSources.add(dataSource.dataSource);
 		}
 		this._isInitializing = false;
+	}
+
+	public get earthRadius(){
+		return this._theViewer.ellipsoid.maximumRadius;
 	}
 
 	public addLayer(layer: Cesium.ImageryLayer): () => void {
@@ -99,9 +128,39 @@ class DemoMapService {
 		if (this._theViewer) {
 			for (const handler of this._mapInteractionListeners) handler.destroy();
 			this._theViewer.imageryLayers.removeAll(true);
+			clearInterval(this._viewSaveIntervalId);
 			this._theViewer.destroy();
 			this._theViewer = null;
 		}
+	}
+
+	private restoreMapView(){
+		const savedView=clientData.get("map/view") as MapView | null;
+		if(savedView){
+			this._theViewer.camera.setView({
+				destination: new Cesium.Cartesian3(savedView.position.x, savedView.position.y, savedView.position.z),
+				orientation:{
+					heading: savedView.heading,
+					pitch: savedView.pitch,
+					roll: savedView.roll,
+				}
+			});
+		}
+	}
+
+	private saveMapView(){
+		const camera=this._theViewer.camera;
+		const savedView={
+			position: {
+				x: camera.position.x,
+				y: camera.position.y,
+				z: camera.position.z
+			},
+			heading: camera.heading,
+			pitch: camera.pitch,
+			roll: camera.roll,
+		};
+		clientData.set("map/view", savedView);
 	}
 
 	private getScreenCenterPosition(): Cesium.Cartesian3 | undefined {
@@ -290,7 +349,7 @@ class DemoMapService {
 		];
 		for(const type of buttonEventTypes){
 			handler.setInputAction((event)=>{
-				const shape=this.getVistaShapeAt(event.position);
+				const shape=this.getDemoShapeAt(event.position);
 				if(shape)
 					shape.mouseButtonEvent(type, new LazyMouseEvent(scene, event.position));
 			}, type);
@@ -298,13 +357,13 @@ class DemoMapService {
 		return handler;
 	}
 
-	private getVistaShapeAt(position: Cesium.Cartesian2): MapShape | null {
+	private getDemoShapeAt(position: Cesium.Cartesian2): MapShape | null {
 		const picked = this._theViewer.scene.pick(position);
 		let pickedShape: MapShape | null = null;
 		if (Cesium.defined(picked)//
 			&& picked.id instanceof Cesium.Entity//
-			&& (picked.id as Cesium.Entity).properties.hasProperty(VISTA_SHAPE_PROPERTY)) {
-			pickedShape=(picked.id.properties[VISTA_SHAPE_PROPERTY] as Cesium.Property).getValue() as MapShape;
+			&& (picked.id as Cesium.Entity).properties.hasProperty(DEMO_SHAPE_PROPERTY)) {
+			pickedShape=(picked.id.properties[DEMO_SHAPE_PROPERTY] as Cesium.Property).getValue() as MapShape;
 		}
 		return pickedShape;
 	}
@@ -434,7 +493,7 @@ interface MapHoverAndUnhoverListener{
 	unhover?: ()=>void;
 }
 
-const VISTA_SHAPE_PROPERTY="vistaShape";
+const DEMO_SHAPE_PROPERTY="demoShape";
 
 export interface MapShapeConfig{
 	visible?: boolean;
@@ -442,11 +501,11 @@ export interface MapShapeConfig{
 }
 
 export interface MapLabelConfig{
-	text?: string;
+	text?: string | (() => string);
 	position?: Cesium.Cartesian3;
 	geoPosition?: LatLonAlt;
-	fillColor?: Cesium.Color;
-	outlineColor?: Cesium.Color;
+	fillColor?: Cesium.Color | (()=>Cesium.Color);
+	outlineColor?: Cesium.Color | (()=>Cesium.Color);
 	style?: Cesium.LabelStyle;
 	pixelOffset?: Cesium.Cartesian2;
 	horizontalOrigin?: Cesium.HorizontalOrigin;
@@ -460,14 +519,14 @@ export abstract class MapShape {
 	private readonly _buttonListeners: MapMouseButtonListener[] = [];
 	private readonly _hoverListeners: MapHoverAndUnhoverListener[] = [];
 	private _isHovered: boolean = false;
+	private _labelFillColorDefault: boolean = true;
+	private _labelOutlineColorDefault: boolean = true;
 	private _labelPositionDefault: boolean = true;
-	private _labelFillColorDefault: boolean=true;
-	private _labelOutlineColorDefault: boolean=true;
 
 	constructor(config?: MapShapeConfig){
 		this._entity=new Cesium.Entity();
 		this._entity.properties = new Cesium.PropertyBag();
-		this._entity.properties.addProperty(VISTA_SHAPE_PROPERTY, new Cesium.ConstantProperty(this));
+		this._entity.properties.addProperty(DEMO_SHAPE_PROPERTY, new Cesium.ConstantProperty(this));
 		if(config && config.label)
 			this.label(config.label);
 	}
@@ -497,41 +556,60 @@ export abstract class MapShape {
 			}
 			if(position)
 				this._entity.position=new Cesium.ConstantPositionProperty(position);
-			let fillColor: Cesium.Color | null = null;
-			if(config.fillColor){
-				this._labelFillColorDefault=false;
-				fillColor=config.fillColor;
-			} else if(!this._entity.label?.fillColor?.getValue()){
-				this._labelFillColorDefault=true;
-				fillColor=this.getDefaultLabelColor();
-			}
-			let outlineColor: Cesium.Color | null = null;
-			if(config.outlineColor){
-				this._labelOutlineColorDefault=false;
-				outlineColor=config.outlineColor;
-			} else if(!this._entity.label?.outlineColor?.getValue()){
-				this._labelOutlineColorDefault=true;
-				outlineColor=this.getDefaultLabelColor();
-			}
 			if(!this._entity.label){
-				this._entity.label=new Cesium.LabelGraphics({
-					text: config.text ?? "Label Text",
-					fillColor: config.fillColor ?? this.getDefaultLabelColor(),
-					outlineColor: outlineColor ?? Cesium.Color.BLACK,
-					style: config.style ?? Cesium.LabelStyle.FILL_AND_OUTLINE,
-					pixelOffset: config.pixelOffset,
-					horizontalOrigin: config.horizontalOrigin?? Cesium.HorizontalOrigin.LEFT,
-					verticalOrigin: config.verticalOrigin?? Cesium.VerticalOrigin.BOTTOM,
-					font: config.font?? "20px sans-serif", //Default 30px font is too huge
-					show: config.visible?? true,
-				});
+				const labelConfig: Cesium.LabelGraphics.ConstructorOptions={};
+				if(!config.text)
+					labelConfig.text="Label Text";
+				else if(typeof config.text==="function")
+					labelConfig.text=new Cesium.CallbackProperty(config.text as (()=>string), false);
+				else
+					labelConfig.text=config.text as string;
+				labelConfig.style= config.style ?? Cesium.LabelStyle.FILL_AND_OUTLINE;
+				labelConfig.pixelOffset= config.pixelOffset;
+				labelConfig.horizontalOrigin= config.horizontalOrigin?? Cesium.HorizontalOrigin.LEFT;
+				labelConfig.verticalOrigin= config.verticalOrigin?? Cesium.VerticalOrigin.BOTTOM;
+				labelConfig.font= config.font?? "20px sans-serif"; //Default 30px font is too huge
+				labelConfig.show= config.visible?? true;
+				if(config.fillColor){
+					this._labelFillColorDefault=false;
+					if(typeof config.fillColor==="function")
+						labelConfig.fillColor=new Cesium.CallbackProperty(config.fillColor as (()=>Cesium.Color), false);
+					else
+						labelConfig.fillColor=config.fillColor as Cesium.Color;
+				} else if(!this._entity.label?.fillColor?.getValue()){
+					this._labelFillColorDefault=true;
+					labelConfig.fillColor=this.getDefaultLabelColor();
+				}
+				if(config.outlineColor){
+					this._labelOutlineColorDefault=false;
+					if(typeof config.outlineColor==="function")
+						labelConfig.outlineColor=new Cesium.CallbackProperty(config.outlineColor as (()=>Cesium.Color), false);
+					else
+						labelConfig.outlineColor=config.outlineColor as Cesium.Color;
+				} else if(!this._entity.label?.outlineColor?.getValue()){
+					this._labelOutlineColorDefault=true;
+					labelConfig.outlineColor=this.getDefaultLabelColor();
+				}
+				this._entity.label=new Cesium.LabelGraphics(labelConfig);
 			} else{
-				if(config.text)
-					this._entity.label.text=new Cesium.ConstantProperty(config.text);
-				if(config.fillColor)
-					this._entity.label.fillColor=new Cesium.ConstantProperty(config.fillColor);
-				if(outlineColor)
-					this._entity.label.outlineColor=new Cesium.ConstantProperty(outlineColor);
+				if(config.text){
+					if(typeof config.text==="function")
+						this._entity.label.text=new Cesium.CallbackProperty(config.text as (()=>string), false);
+					else
+						this._entity.label.text=new Cesium.ConstantProperty(config.text as string);
+				}
+				if(config.fillColor){
+					if(typeof config.fillColor==="function")
+						this._entity.label.fillColor=new Cesium.CallbackProperty(config.fillColor as ()=>Cesium.Color, false);
+					else
+						this._entity.label.fillColor=new Cesium.ConstantProperty(config.fillColor as Cesium.Color);
+				}
+				if(config.outlineColor){
+					if(typeof config.outlineColor==="function")
+						this._entity.label.outlineColor=new Cesium.CallbackProperty(config.outlineColor as ()=>Cesium.Color, false);
+					else
+						this._entity.label.outlineColor=new Cesium.ConstantProperty(config.outlineColor as Cesium.Color);
+				}
 				if(config.style)
 					this._entity.label.style=new Cesium.ConstantProperty(config.style);
 				if(config.pixelOffset)
@@ -626,10 +704,10 @@ export abstract class MapShape {
 export interface MapMarkerConfig extends MapShapeConfig{
 	position?: Cesium.Cartesian3;
 	geoPosition?: LatLonAlt;
-	pixelSize?: number;
-	color?: Cesium.Color;
-	outlineColor?: Cesium.Color;
-	outlineWidth?: number;
+	pixelSize?: number | (()=>number);
+	color?: Cesium.Color | (()=>Cesium.Color);
+	outlineColor?: Cesium.Color | (()=>Cesium.Color);
+	outlineWidth?: number | (()=>number);
 }
 
 export class MapMarker extends MapShape{
@@ -643,12 +721,28 @@ export class MapMarker extends MapShape{
 			this.getCesiumEntity().position=new Cesium.ConstantPositionProperty(Cesium.Cartesian3.fromDegrees(
 				config.geoPosition.lon, config.geoPosition.lat, config.geoPosition.alt));
 		}
-		this.getCesiumEntity().point=new Cesium.PointGraphics({
-			pixelSize: config?.pixelSize ?? 3,
-			color: config?.color ?? Cesium.Color.BLACK,
-			outlineColor: config?.outlineColor ?? Cesium.Color.BLACK,
-			outlineWidth: config?.outlineWidth ?? 0,
-		});
+		const options: Cesium.PointGraphics.ConstructorOptions = {};
+		if(config.pixelSize!==null && config.pixelSize!==undefined){
+			options.pixelSize=(typeof config.pixelSize === "function")
+				? new Cesium.CallbackProperty(config.pixelSize as ()=>number, false)
+				: new Cesium.ConstantProperty(config.pixelSize as number);
+		}
+		if(config.color){
+			options.color=(typeof config.color === "function")
+				? new Cesium.CallbackProperty(config.color as ()=>Cesium.Color, false)
+				: new Cesium.ConstantProperty(config.color as Cesium.Color);
+		}
+		if(config.outlineColor){
+			options.outlineColor=(typeof config.outlineColor === "function")
+				? new Cesium.CallbackProperty(config.outlineColor as ()=>Cesium.Color, false)
+				: new Cesium.ConstantProperty(config.outlineColor as Cesium.Color);
+		}
+		if(config.outlineWidth!==null && config.outlineWidth!==undefined){
+			options.outlineWidth=(typeof config.outlineWidth === "function")
+				? new Cesium.CallbackProperty(config.outlineWidth as ()=>number, false)
+				: new Cesium.ConstantProperty(config.outlineWidth as number);
+		}
+		this.getCesiumEntity().point=new Cesium.PointGraphics(options);
 	}
 
 	public get position(): Cesium.Cartesian3{
@@ -695,8 +789,8 @@ export class MapMarker extends MapShape{
 
 export interface PolyLineConfig extends MapShapeConfig{
 	positions?: LatLonAlt[];
-	width?: number;
-	color?: Cesium.Color;
+	width?: number | (()=>number);
+	color?: Cesium.Color | (()=>Cesium.Color);
 	material?: Cesium.MaterialProperty;
 	clampToGround?: boolean;
 }
@@ -707,45 +801,68 @@ export class MapPolyLine extends MapShape {
 
 	constructor(config?: PolyLineConfig) {
 		super(config);
-		let material: Cesium.MaterialProperty=new Cesium.ColorMaterialProperty(Cesium.Color.BLACK);
+
+		if (config.positions) {
+			for (const position of config.positions)
+				this._positions.push(Cesium.Cartesian3.fromDegrees(position.lon, position.lat, position.alt));
+		}
+		const lineConfig: Cesium.PolylineGraphics.ConstructorOptions = {};
+		lineConfig.positions=new Cesium.CallbackProperty((time, result) => {
+			const newResult=(result ?? []) as Cesium.Cartesian3[];
+			newResult.length=self._positions.length;
+			for(let i=0;i<self._positions.length;i++)
+				newResult[i]=self._positions[i];
+			return newResult;
+		}, false);
+		if(config.width !== null && config.width !== undefined){
+			if(typeof config.width === "function")
+				lineConfig.width=new Cesium.CallbackProperty(config.width as ()=>number, false);
+			else
+				lineConfig.width=new Cesium.ConstantProperty(config.width as number);
+		} else
+			lineConfig.width=2;
 		if(config){
 			if(config.color){
 				if(config.material)
 					throw new Error("Specify either color or material, but not both");
-				material=new Cesium.ColorMaterialProperty(config.color);
+				if(typeof config.color === "function")
+					lineConfig.material=new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(config.color as ()=>Cesium.Color, false));
+				else
+					lineConfig.material=new Cesium.ColorMaterialProperty(config.color as Cesium.Color);
 			} else if(config.material)
-				material=config.material;
+				lineConfig.material=config.material;
 
-			if (config.positions) {
-				for (const position of config.positions)
-					this._positions.push(Cesium.Cartesian3.fromDegrees(position.lon, position.lat, position.alt));
-			}
-		}
+		} else
+			lineConfig.material=new Cesium.ColorMaterialProperty(Cesium.Color.BLACK);
+		lineConfig.clampToGround=config?.clampToGround ?? false;
+		lineConfig.show=config && config.visible != undefined ? config.visible : true
+
 		const self=this;
-		this._polyLine = new Cesium.PolylineGraphics({
-			positions: new Cesium.CallbackProperty((time, result) => {
-				const newResult=(result ?? []) as Cesium.Cartesian3[];
-				newResult.length=self._positions.length;
-				for(let i=0;i<self._positions.length;i++)
-					newResult[i]=self._positions[i];
-				return newResult;
-			}, false), //
-			width: config?.width ?? 2, //
-			material: material, //
-			clampToGround: config?.clampToGround ?? false, //
-			show: config && config.visible != undefined ? config.visible : true, //
-		});
+		this._polyLine = new Cesium.PolylineGraphics(lineConfig);
 		this.getCesiumEntity().polyline=this._polyLine;
 	}
 
 	public modify(config: PolyLineConfig) {
 		if (config.positions) this.geoPositions = config.positions;
-		if (config.width) this.width = config.width;
-		if(config.material)
-			throw new Error("Material cannot be assigned this way");
-		if (config.color) this.color = config.color;
-		if (config.clampToGround != undefined) this.clampToGround = config.clampToGround;
-		if (config.visible != undefined) this.visible = config.visible;
+		if (config.width !== null && config.width !== undefined){
+			if(typeof config.width === "function")
+				this._polyLine.width=new Cesium.CallbackProperty(config.width as ()=>number, false);
+			else
+				this._polyLine.width=new Cesium.ConstantProperty(config.width as number);
+		}
+		if(config.material){
+			if(config.color)
+				throw new Error("Specify material or color, but not both");
+			this._polyLine.material=config.material;
+		}
+		if (config.color){
+			if(typeof config.color === "function")
+				this._polyLine.material=new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(config.color as ()=>Cesium.Color, false));
+			else
+				this._polyLine.material=new Cesium.ColorMaterialProperty(config.color as Cesium.Color);
+		}
+		if (config.clampToGround !== undefined) this.clampToGround = config.clampToGround;
+		if (config.visible !== undefined) this.visible = config.visible;
 	}
 
 	public get cartPositions(): readonly Cesium.Cartesian3[] {
@@ -778,6 +895,9 @@ export class MapPolyLine extends MapShape {
 
 	public get material(): Cesium.MaterialProperty {
 		return this._polyLine.material;
+	}
+	public set material(material: Cesium.MaterialProperty){
+		this._polyLine.material=material;
 	}
 	public get color(): Cesium.Color | null {
 		if(this.material instanceof Cesium.ColorMaterialProperty)
@@ -833,4 +953,4 @@ export class MapPolyLine extends MapShape {
 	}
 }
 
-export default VistaMapService;
+export default DemoMapService;

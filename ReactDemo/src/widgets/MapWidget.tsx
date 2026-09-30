@@ -1,6 +1,6 @@
 // src/components/WorldWindGlobe.tsx
 import React, { useEffect, useRef } from "react";
-import { demoMap } from "../services/services";
+import { vistaMap } from "../services/services";
 
 export const MapWidget: React.FC = () => {
 	// mutable WorldWindow reference instance
@@ -8,10 +8,10 @@ export const MapWidget: React.FC = () => {
 
 	useEffect(() => {
 		if(cesiumContainerRef.current)
-			demoMap.init(cesiumContainerRef.current);
+			vistaMap.init(cesiumContainerRef.current);
 
 		// Clean up the viewer instance when the component unmounts
-		return () => demoMap.destroy();
+		return () => vistaMap.destroy();
 	}, []);
 
 	const containerStyle: React.CSSProperties = {
